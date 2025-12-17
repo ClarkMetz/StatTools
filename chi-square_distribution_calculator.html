@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Chi-Squared Distribution Calculator</title>
+<style>
+#calculator {
+  width: 600px;
+  margin: 20px auto;
+  border: 1px solid #ccc;
+  padding: 20px;
+  text-align: center;
+}
+.input-group {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.input-group label {
+  margin-right: 5px;
+  white-space: nowrap;
+}
+#probability-input {
+  margin: 20px 0;
+  padding: 10px;
+  border: 2px solid #007bff;
+  background-color: #e7f3ff;
+  font-weight: bold;
+  font-size: 16px;
+  white-space: nowrap;
+}
+#distributionChart {
+  margin-top: 15px;
+}
+button {
+  display: inline-block;
+  margin: 5px;
+  padding: 5px 15px;
+  font-size: 14px;
+  cursor: pointer;
+}
+button.active {
+  background-color: #007bff;
+  color: white;
+}
+#button-container {
+  margin-bottom: 20px;
+}
+input[type="number"] {
+  width: 80px;
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
+</head>
+<body>
+<div id="calculator">
+  <h2>Chi-Squared Distribution Calculator</h2>
+  <div id="button-container">
+    <button id="standardButton" class="active" onclick="setMode('standard')">Standard</button>
+    <button id="betweenButton" onclick="setMode('between')">Between</button>
+  </div>
+  <div class="input-group"><label for="df">Degrees of Freedom (df):</label><input type="number" id="df" value="1" min="1" step="1"></div>
+  <div id="probability-input">
+    <span id="standard-inputs">
+      P(χ² <select id="comparison-operator">
+        <option value="less">&le;</option>
+        <option value="greater">&ge;</option>
+      </select><input type="number" id="x">) = <input type="number" id="probability" step="0.0001">
+    </span>
+    <span id="between-inputs" style="display: none;">
+      P(<input type="number" id="lower-x"> &le; χ² &le; <input type="number" id="upper-x">) = <input type="number" id="between-probability" step="0.0001">
+    </span>
+  </div>
+  <button onclick="calculate()">Compute</button>
+  <canvas id="distributionChart" width="500" height="300"></canvas>
+</div>
+
+<script>
+let myChart;
+let mode = 'standard';
+
+function setMode(selectedMode) {
+  mode = selectedMode;
+  document.getElementById('standardButton').classList.toggle('active', mode === 'standard');
+  document.getElementById('betweenButton').classList.toggle('active', mode === 'between');
+  document.getElementById('standard-inputs').style.display = mode === 'standard' ? 'inline' : 'none';
+  document.getElementById('between-inputs').style.display = mode === 'between' ? 'inline' : 'none';
+  removeShading(); // Remove shading when mode changes
+}
+
+function initializeChart() {
+  const ctx = document.getElementById('distributionChart').getContext('2d');
+  myChart = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Chi-Squared Distribution',
+        data: [],
+        borderColor: 'blue',
+        borderWidth: 2,
+        fill: false,
+        type: 'line',
+        pointRadius: 0
+      },
+      {
+        label: 'Shaded Region',
+        data: [],
+        borderColor: 'rgba(0,0,0,0)',
+        backgroundColor: 'rgba(0, 0, 255, 0.3)',
+        fill: true,
+        type: 'line',
+        pointRadius: 0
+      }]
+    },
+    options: {
+      scales: {
+        x: {
+          type: 'linear',
+          position: 'bottom',
+          min: 0,
+          max: 15,
+          title: { display: true, text: 'χ²' }
+        },
+        y: {
+          beginAtZero: true,
+          max: 1.6 // Initial max value for df = 1
+        }
+      }
+    }
+  });
+}
+
+function updateChart(df, x = null, isLess = true) {
+  const data = [];
+  const shadedData = [];
+  const mean = df;
+  const threshold = 10; // Adjust this threshold to see more of the curve
+  const minX = 0;
+  const maxX = mean + threshold;
+
+  const step = (maxX - minX) / 100;
+
+  for (let i = minX; i <= maxX; i += step) {
+    let y = jStat.chisquare.pdf(i, df);
+    data.push({ x: i, y: y });
+    if (x !== null && ((isLess && i <= x) || (!isLess && i >= x))) {
+      shadedData.push({ x: i, y: y });
+    }
+  }
+
+  myChart.options.scales.x.min = minX;
+  myChart.options.scales.x.max = maxX;
+  myChart.options.scales.y.max = df === 1 ? 1.6 : (df === 2 ? 0.5 : (df === 3 ? 0.25 : 0.2));
+  myChart.data.datasets[0].data = data;
+  myChart.data.datasets[0].label = `Chi-Squared Distribution (df=${df})`;
+  myChart.data.datasets[1].data = shadedData;
+  myChart.update();
+}
+
+function updateChartBetween(df, lowerX, upperX) {
+  const data = [];
+  const shadedData = [];
+  const mean = df;
+  const threshold = 5; // Adjust this threshold to see more of the curve
+  const minX = 0;
+  const maxX = mean + threshold;
+
+  const step = (maxX - minX) / 100;
+
+  for (let i = minX; i <= maxX; i += step) {
+    let y = jStat.chisquare.pdf(i, df);
+    data.push({ x: i, y: y });
+    if (i >= lowerX && i <= upperX) {
+      shadedData.push({ x: i, y: y });
+    }
+  }
+
+  myChart.options.scales.x.min = minX;
+  myChart.options.scales.x.max = maxX;
+  myChart.options.scales.y.max = df === 1 ? 1.6 : (df === 2 ? 0.5 : (df === 3 ? 0.25 : 0.2));
+  myChart.data.datasets[0].data = data;
+  myChart.data.datasets[0].label = `Chi-Squared Distribution (df=${df})`;
+  myChart.data.datasets[1].data = shadedData;
+  myChart.update();
+}
+
+function removeShading() {
+  if (myChart) {
+    myChart.data.datasets[1].data = [];
+    myChart.update();
+  }
+}
+
+document.getElementById('df').addEventListener('input', () => {
+  const df = parseInt(document.getElementById('df').value);
+  if (df >= 1) {
+    updateChart(df);
+  }
+});
+
+document.getElementById('x').addEventListener('input', () => {
+  document.getElementById('probability').value = "";
+  removeShading();
+});
+
+document.getElementById('probability').addEventListener('input', () => {
+  document.getElementById('x').value = "";
+  removeShading();
+});
+
+document.getElementById('comparison-operator').addEventListener('change', removeShading);
+
+document.getElementById('lower-x').addEventListener('input', () => {
+  document.getElementById('between-probability').value = "";
+  removeShading();
+});
+
+document.getElementById('upper-x').addEventListener('input', () => {
+  document.getElementById('between-probability').value = "";
+  removeShading();
+});
+
+document.getElementById('between-probability').addEventListener('input', () => {
+  document.getElementById('lower-x').value = "";
+  document.getElementById('upper-x').value = "";
+  removeShading();
+});
+
+function calculate() {
+  const df = parseInt(document.getElementById('df').value);
+
+  if (df < 1) { alert("Degrees of freedom must be at least 1."); return; }
+
+  if (mode === 'standard') {
+    const xInput = document.getElementById('x');
+    const probabilityInput = document.getElementById('probability');
+    const comparison = document.getElementById('comparison-operator').value;
+
+    if (!xInput.value && !probabilityInput.value) { alert("Enter χ²-value or probability."); return; }
+
+    if (xInput.value) {
+      const x = parseFloat(xInput.value);
+      let probability = comparison === 'less' ? jStat.chisquare.cdf(x, df) : 1 - jStat.chisquare.cdf(x, df);
+      probabilityInput.value = roundDisplayValue(probability);
+      updateChart(df, x, comparison === 'less');
+    } else {
+      let probability = parseFloat(probabilityInput.value);
+      if (isNaN(probability) || probability < 0 || probability > 1) { alert("Enter a valid probability (0-1)."); return; }
+      let x = comparison === 'less' ? jStat.chisquare.inv(probability, df) : jStat.chisquare.inv(1 - probability, df);
+      xInput.value = roundDisplayValue(x);
+      updateChart(df, x, comparison === 'less');
+    }
+  } else if (mode === 'between') {
+    const lowerXInput = document.getElementById('lower-x');
+    const upperXInput = document.getElementById('upper-x');
+    const probabilityInput = document.getElementById('between-probability');
+
+    if (probabilityInput.value) {
+      let probability = parseFloat(probabilityInput.value);
+      if (isNaN(probability) || probability <= 0 || probability >= 1) { alert("Enter a valid probability (0-1)."); return; }
+
+      const lowerX = jStat.chisquare.inv((1 - probability) / 2, df);
+      const upperX = jStat.chisquare.inv((1 + probability) / 2, df);
+
+      lowerXInput.value = roundDisplayValue(lowerX);
+      upperXInput.value = roundDisplayValue(upperX);
+
+      updateChartBetween(df, lowerX, upperX);
+    } else {
+      if (!lowerXInput.value || !upperXInput.value) { alert("Enter both lower and upper χ²-values."); return; }
+
+      const lowerX = parseFloat(lowerXInput.value);
+      const upperX = parseFloat(upperXInput.value);
+
+      if (lowerX >= upperX) { alert("Upper χ² must be greater than lower χ²."); return; }
+
+      let probability = jStat.chisquare.cdf(upperX, df) - jStat.chisquare.cdf(lowerX, df);
+      probabilityInput.value = roundDisplayValue(probability);
+
+      updateChartBetween(df, lowerX, upperX);
+    }
+  }
+}
+
+function roundDisplayValue(value) {
+  return Math.abs(value) < 1e-6 ? 0 : Math.round(value * 1000000) / 1000000;
+}
+
+// Initialize the chart on page load
+window.onload = function() {
+  initializeChart();
+  updateChart(1); // Initialize with df = 1
+};
+</script>
+
+</body>
+</html>

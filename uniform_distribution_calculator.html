@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Uniform Distribution Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 700px;
+      margin: auto;
+      background-color: white;
+    }
+    h2 {
+      text-align: center;
+    }
+    .input-group {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    label {
+      white-space: nowrap;
+    }
+    input {
+      width: 80px;
+      padding: 5px;
+    }
+    .button-group {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .button-group button {
+      margin: 0 5px;
+      padding: 5px 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    #distributionChart {
+      max-width: 600px;
+      margin: 20px auto;
+    }
+  </style>
+</head>
+<body>
+  <h2>Uniform Distribution Calculator</h2>
+  <div class="button-group">
+    <button id="standardButton" class="active" onclick="setMode('standard')">Standard</button>
+    <button id="betweenButton" onclick="setMode('between')">Between</button>
+  </div>
+
+  <div class="input-group">
+    <label for="a">Lower (a):</label>
+    <input type="number" id="a" value="0" step="0.01">
+    <label for="b">Upper (b):</label>
+    <input type="number" id="b" value="1" step="0.01">
+  </div>
+
+  <div id="standard-inputs" class="input-group">
+    <label>P(X
+      <select id="comparison">
+        <option value="less">≤</option>
+        <option value="greater">≥</option>
+      </select>
+    </label>
+    <input type="number" id="x" step="0.0001">
+    =
+    <input type="number" id="probability" step="0.0001">
+  </div>
+
+  <div id="between-inputs" class="input-group" style="display:none">
+    <label>P(</label>
+    <input type="number" id="lower-x" step="0.0001">
+    ≤ X ≤
+    <input type="number" id="upper-x" step="0.0001">
+    =
+    <input type="number" id="between-probability" step="0.0001">
+  </div>
+
+  <div style="text-align:center">
+    <button onclick="calculate()">Compute</button>
+  </div>
+
+  <canvas id="distributionChart" width="600" height="300"></canvas>
+
+  <script>
+    let mode = 'standard';
+    let chart;
+
+    function setMode(selected) {
+      mode = selected;
+      document.getElementById('standard-inputs').style.display = (selected === 'standard') ? 'flex' : 'none';
+      document.getElementById('between-inputs').style.display = (selected === 'between') ? 'flex' : 'none';
+      document.getElementById('standardButton').classList.toggle('active', selected === 'standard');
+      document.getElementById('betweenButton').classList.toggle('active', selected === 'between');
+    }
+
+    function calculate() {
+      const a = parseFloat(document.getElementById('a').value);
+      const b = parseFloat(document.getElementById('b').value);
+      if (isNaN(a) || isNaN(b) || a >= b) {
+        alert('Please enter valid numbers: a < b');
+        return;
+      }
+
+      const x = parseFloat(document.getElementById('x').value);
+      const pInput = document.getElementById('probability');
+      const comparison = document.getElementById('comparison').value;
+      const lowerX = parseFloat(document.getElementById('lower-x').value);
+      const upperX = parseFloat(document.getElementById('upper-x').value);
+      const betweenP = document.getElementById('between-probability');
+
+      if (mode === 'standard') {
+        if (!isNaN(x)) {
+          let prob = comparison === 'less' ? jStat.uniform.cdf(x, a, b) : 1 - jStat.uniform.cdf(x, a, b);
+          pInput.value = prob.toFixed(6);
+          drawChart(a, b, comparison === 'less' ? x : null, comparison === 'greater' ? x : null);
+        } else if (!isNaN(parseFloat(pInput.value))) {
+          let p = parseFloat(pInput.value);
+          let val = comparison === 'less' ? jStat.uniform.inv(p, a, b) : jStat.uniform.inv(1 - p, a, b);
+          document.getElementById('x').value = val.toFixed(6);
+          drawChart(a, b, comparison === 'less' ? val : null, comparison === 'greater' ? val : null);
+        }
+      } else {
+        if (!isNaN(lowerX) && !isNaN(upperX)) {
+          let p = jStat.uniform.cdf(upperX, a, b) - jStat.uniform.cdf(lowerX, a, b);
+          betweenP.value = p.toFixed(6);
+          drawChart(a, b, lowerX, upperX);
+        }
+      }
+    }
+
+    function drawChart(a = 0, b = 1, lower = null, upper = null) {
+      const ctx = document.getElementById('distributionChart').getContext('2d');
+      const step = 0.01;
+      const data = [];
+      const shaded = [];
+      for (let x = a - 0.5; x <= b + 0.5; x += step) {
+        let y = jStat.uniform.pdf(x, a, b);
+        data.push({x, y});
+        if ((lower !== null && x <= lower && upper === null) ||
+            (upper !== null && x >= upper && lower === null) ||
+            (lower !== null && upper !== null && x >= lower && x <= upper)) {
+          shaded.push({x, y});
+        }
+      }
+
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [
+            {
+              label: `Uniform(0, 1)`,
+              data: data,
+              borderColor: 'blue',
+              fill: false,
+              pointRadius: 0,
+              tension: 0
+            },
+            {
+              label: 'Shaded Region',
+              data: shaded,
+              backgroundColor: 'rgba(0, 0, 255, 0.3)',
+              borderColor: 'rgba(0,0,0,0)',
+              fill: true,
+              pointRadius: 0,
+              type: 'line'
+            }
+          ]
+        },
+        options: {
+          scales: {
+            x: { type: 'linear', title: { display: true, text: 'X' } },
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+  setMode('standard');
+  const a = parseFloat(document.getElementById('a').value);
+  const b = parseFloat(document.getElementById('b').value);
+  drawChart(a, b, null, null);
+});
+  </script>
+</body>
+</html>

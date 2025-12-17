@@ -1,0 +1,720 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chi-Square Test of Independence</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      display: block;
+    }
+    .wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    table {
+      border-collapse: collapse;
+      margin-bottom: 0;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: center;
+      min-width: 60px;
+    }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      box-sizing: border-box;
+      text-align: center;
+    }
+    .button-row {
+      margin: 20px 0 10px;
+    }
+        .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .add-remove-row {
+      display: flex;
+      gap: 5px;
+      margin-left: 62px;
+      margin-top: 10px;
+    }
+    .column-button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-left: 5px;
+      margin-top: 30px;
+    }
+    button {
+      padding: 2px 6px;
+      font-size: 12px;
+    }
+    .expected {
+      font-size: 0.8em;
+    }
+    .overlay-expected {
+      color: black;
+    }
+    .overlay-contrib {
+      color: #003366;
+    }
+    .overlay-resid {
+      color: #663399;
+    }
+    .overlay-stdresid {
+      color: #4a90e2;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jstat/1.9.5/jstat.min.js"></script>
+</head>
+<body style="background-color: white;">
+  <!-- Begin full GUI wrapper -->
+<div style="border: 1px solid #ccc; padding: 20px; margin: 0 auto; max-width: 900px; background-color: #f9f9f9;">
+    <div style="text-align: center;">
+  <h2 style="margin-bottom: 0;">Chi-Square Test of Independence</h2>
+  <div style="margin-top: 10px; margin-bottom: 20px; font-weight: normal;">
+    <label for="alphaInput">Significance Level α = </label>
+    <input type="number" id="alphaInput" value="0.05" min="0.001" max="0.999" step="0.001" style="width: 60px; text-align: center;">
+  </div>
+</div>
+
+<table id="legend" style="align-self: flex-start; margin-bottom: 10px; border-collapse: collapse; display: none;">
+  <caption style="caption-side: top; font-weight: bold; text-align: left;">Legend:</caption>
+  <tr>
+  <td style="border: 1px solid #ccc; padding: 6px; text-align: center; min-width: 60px;">
+    <div style="display: inline-block; padding: 2px 6px; border: 1px solid #ccc; background-color: white; border-radius: 4px;">
+      Count
+    </div>
+    <br>
+    <span id="legend-values" style="font-size: 0.8em;"></span>
+  </td>
+</tr>
+</table>
+  
+    <div style="text-align: center; margin-top: 10px;">
+  <button onclick="resetTable()">Reset</button>
+</div>
+
+    <div style="display: flex; align-items: center; justify-content: center;">
+  <div id="table-container"></div>
+  <div class="column-button-container">
+    <button style="width: 24px; height: 24px;" onclick="addColumn()">+</button>
+    <button style="width: 24px; height: 24px;" onclick="removeColumn()">−</button>
+  </div>
+</div>
+
+
+      <div class="add-remove-row" style="display: flex; justify-content: center; margin-top: 10px; gap: 5px;">
+  <button style="width: 24px; height: 24px;" onclick="addRow()">+</button>
+  <button style="width: 24px; height: 24px;" onclick="removeRow()">−</button>
+</div>
+<div style="text-align: center; margin-top: 10px;">
+  <button id="calculate-btn" onclick="calculateChiSquare()" style="font-size: 16px; padding: 6px 12px;">Calculate</button>
+</div>
+<div class="button-row" id="toggle-controls" style="text-align: center; display: none;">
+  <input type="checkbox" id="toggle-expected" onchange="toggleOverlay('expected')">
+  <label for="toggle-expected">Expected Count</label>
+
+  <input type="checkbox" id="toggle-contrib" onchange="toggleOverlay('contrib')">
+  <label for="toggle-contrib">χ² Contrib.</label>
+
+  <input type="checkbox" id="toggle-resid" onchange="toggleOverlay('resid')">
+  <label for="toggle-resid">Residual</label>
+
+  <input type="checkbox" id="toggle-stdresid" onchange="toggleOverlay('stdresid')">
+  <label for="toggle-stdresid">Std. Residual</label>
+</div>
+<div id="results"
+ style="margin: 20px auto 0; border: 2px solid #4da6ff; background-color: #e6f3ff; padding: 10px; max-width: 400px; display: none; text-align: center;"></div>
+  </div>
+
+  <script>
+    // Disable Calculate button if any overlay checkbox is checked
+    document.addEventListener('DOMContentLoaded', function () {
+      const checkboxes = ['expected', 'contrib', 'resid', 'stdresid'];
+      checkboxes.forEach(id => {
+        document.getElementById(`toggle-${id}`).addEventListener('change', () => {
+          const anyChecked = checkboxes.some(id => document.getElementById(`toggle-${id}`).checked);
+          document.getElementById('calculate-btn').disabled = anyChecked;
+        });
+      });
+    });
+    let numRows = 4;
+    let numCols = 4;
+
+    function createTable() {
+  const handleArrowNavigation = (e) => {
+    const input = e.target;
+    const cell = input.closest('td');
+    const row = cell?.parentElement;
+    const table = row?.parentElement?.parentElement;
+    if (!table) return;
+
+    const rowIndex = Array.from(row.parentElement.children).indexOf(row);
+    const colIndex = Array.from(row.children).indexOf(cell);
+
+    let targetInput;
+
+    if (e.key === 'ArrowUp') {
+      if (rowIndex > 0) {
+        targetInput = table.rows[rowIndex - 1].cells[colIndex]?.querySelector('input');
+      }
+    } else if (e.key === 'ArrowDown') {
+      if (rowIndex < table.rows.length - 1) {
+        targetInput = table.rows[rowIndex + 1].cells[colIndex]?.querySelector('input');
+      }
+    } else if (e.key === 'ArrowLeft') {
+      if (colIndex > 0) {
+        targetInput = row.cells[colIndex - 1]?.querySelector('input');
+      }
+    } else if (e.key === 'ArrowRight') {
+      if (colIndex < row.cells.length - 1) {
+        targetInput = row.cells[colIndex + 1]?.querySelector('input');
+      }
+    }
+
+    if (targetInput) {
+      e.preventDefault();
+      targetInput.focus();
+    }
+  };
+  const container = document.getElementById('table-container');
+  const prevData = [];
+  const prevLabels = { row: [], col: [] };
+
+  const oldTable = document.getElementById('data-table');
+  if (oldTable) {
+    for (let i = 1; i < oldTable.rows.length; i++) {
+      prevData[i - 1] = [];
+      for (let j = 1; j < oldTable.rows[i].cells.length; j++) {
+        const input = oldTable.rows[i].cells[j].querySelector('input');
+        prevData[i - 1][j - 1] = input ? input.value : '';
+      }
+    }
+    for (let i = 1; i < oldTable.rows.length; i++) {
+      const labelInput = oldTable.rows[i].cells[0].querySelector('input');
+      prevLabels.row[i - 1] = labelInput ? labelInput.value : `Row ${i}`;
+    }
+    for (let j = 1; j < oldTable.rows[0].cells.length; j++) {
+      const labelInput = oldTable.rows[0].cells[j].querySelector('input');
+      prevLabels.col[j - 1] = labelInput ? labelInput.value : `Column ${j}`;
+    }
+  }
+
+  container.innerHTML = '';
+  const table = document.createElement('table');
+  table.id = "data-table";
+  const tbody = document.createElement('tbody');
+
+  for (let i = 0; i < numRows; i++) {
+    const row = document.createElement('tr');
+    for (let j = 0; j < numCols; j++) {
+      const cell = document.createElement(i === 0 || j === 0 ? 'th' : 'td');
+      const input = document.createElement('input');
+      input.type = (i === 0 || j === 0) ? 'text' : 'number';
+      input.placeholder = (i === 0 && j > 0) ? `Column ${j}` : (j === 0 && i > 0) ? `Row ${i}` : '';
+      if (i === 0 && j > 0) input.value = prevLabels.col[j - 1] || `Column ${j}`;
+      // Remove top-left input box
+      if (i === 0 && j === 0) {
+        row.appendChild(document.createElement('th'));
+        continue;
+      }
+      if (j === 0 && i > 0) input.value = prevLabels.row[i - 1] || `Row ${i}`;
+      if (i > 0 && j > 0) input.value = (prevData[i - 1] && prevData[i - 1][j - 1]) || '';
+      input.addEventListener('input', clearResults);
+      input.addEventListener('keydown', handleArrowNavigation);
+      cell.appendChild(input);
+      row.appendChild(cell);
+    }
+    tbody.appendChild(row);
+  }
+
+  table.appendChild(tbody);
+  container.appendChild(table);
+    }
+
+    function clearResults() {
+  const table = document.getElementById('data-table');
+  if (!table) return;
+      while (table.rows.length > numRows) table.deleteRow(-1);
+      for (let i = 0; i < table.rows.length; i++) {
+        while (table.rows[i].cells.length > numCols) table.rows[i].deleteCell(-1);
+        if (i > 0) {
+          const cell = table.rows[i].cells[numCols - 1];
+          if (cell && cell.childNodes.length > 1) {
+            cell.innerHTML = '';
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.addEventListener('input', clearResults);
+            table.rows[i].cells[numCols - 1].appendChild(input);
+          }
+        }
+      }
+    }
+
+    function addRow() {
+  numRows++;
+  createTable();
+}
+
+    function removeRow() {
+      if (numRows > 3) {
+        numRows--;
+        createTable();
+      }
+    }
+
+    function addColumn() {
+      numCols++;
+      createTable();
+    }
+
+    function removeColumn() {
+      if (numCols > 3) {
+        numCols--;
+        createTable();
+      }
+    }
+
+function resetTable() {
+  // Reset defaults
+  numRows = 4;
+  numCols = 4;
+
+  // Hide and clear results
+  const results = document.getElementById('results');
+  results.style.display = 'none';
+  results.innerHTML = '';
+
+  // Hide toggle controls and legend
+  document.getElementById('toggle-controls').style.display = 'none';
+  document.getElementById('legend').style.display = 'none';
+  document.getElementById('legend-values').innerHTML = '';
+
+  // Reset overlay tracking
+  window._lastExpected = null;
+  window._lastValidRows = null;
+  window._lastValidCols = null;
+  window._shownMetrics = { expected: false, contrib: false, resid: false, stdresid: false };
+
+  // Restore +/- column buttons if missing
+  if (!document.querySelector('.column-button-container')) {
+    const colControls = document.createElement('div');
+    colControls.className = 'column-button-container';
+    colControls.innerHTML = `
+      <button style="width: 24px; height: 24px;" onclick="addColumn()">+</button>
+      <button style="width: 24px; height: 24px;" onclick="removeColumn()">−</button>
+    `;
+    document.getElementById('table-container').after(colControls);
+  }
+
+  // Restore +/- row buttons if missing
+  if (!document.querySelector('.add-remove-row')) {
+    const rowControls = document.createElement('div');
+    rowControls.className = 'add-remove-row';
+    rowControls.style.display = 'flex';
+    rowControls.style.justifyContent = 'center';
+    rowControls.style.marginTop = '10px';
+    rowControls.style.gap = '5px';
+    rowControls.innerHTML = `
+      <button style="width: 24px; height: 24px;" onclick="addRow()">+</button>
+      <button style="width: 24px; height: 24px;" onclick="removeRow()">−</button>
+    `;
+    const calcBtnContainer = document.querySelector('#calculate-btn').parentElement;
+    calcBtnContainer.before(rowControls);
+  }
+  document.getElementById('calculate-btn').disabled = false; 
+
+  // Recreate the table
+  createTable();
+
+  // Clear all non-label cells
+  const table = document.getElementById('data-table');
+  if (table) {
+    for (let i = 1; i < numRows; i++) {
+      for (let j = 1; j < numCols; j++) {
+        const input = table.rows[i].cells[j].querySelector('input');
+        if (input) input.value = '';
+      }
+    }
+  }
+}
+
+
+createTable();
+  window._legendOrder = [];
+  createTable();
+
+
+function updateLegend(labels) {
+  const span = document.getElementById('legend-values');
+  if (span) {
+    const seen = new Set();
+    const ordered = labels.filter(label => {
+      if (!seen.has(label)) {
+        seen.add(label);
+        return true;
+      }
+      return false;
+    });
+    const colorMap = {
+      'Expected': 'black',
+      'Chi-Square Contribution': '#003366',
+      'Chi-Square Residual': '#663399',
+      'Standardized Residual': '#4a90e2'
+    };
+    const extra = ordered.slice(1).map(label => {
+      const color = colorMap[label] || 'gray';
+      return `<span style='color: ${color}'>(${label})</span>`;
+    }).join('<br>');
+    span.innerHTML = extra;
+  }
+}
+
+function calculateChiSquare() {
+  // Remove +/- buttons
+  const rowControls = document.querySelector('.add-remove-row');
+  const colControls = document.querySelector('.column-button-container');
+  if (rowControls) rowControls.remove();
+  if (colControls) colControls.remove();
+  const table = document.getElementById('data-table');
+  if (!table) return;
+  // Clear any previous overlays
+  const observed = [];
+  const rowLabels = [];
+  const colLabels = [];
+
+  for (let i = 1; i < numRows; i++) {
+    const row = [];
+    for (let j = 1; j < numCols; j++) {
+      const val = table.rows[i].cells[j].firstChild.value;
+      const num = parseFloat(val);
+      row.push(!isNaN(num) ? num : null);
+    }
+    if (row.some(x => x !== null)) {
+      observed.push(row);
+      rowLabels.push(table.rows[i].cells[0].firstChild.value || `Row ${i}`);
+    }
+  }
+
+  for (let j = 1; j < numCols; j++) {
+    let valid = false;
+    for (let i = 1; i < numRows; i++) {
+      if (table.rows[i].cells[j].firstChild.value !== '') valid = true;
+    }
+    if (valid) colLabels.push(table.rows[0].cells[j].firstChild.value || `Column ${j}`);
+  }
+
+  const validCols = colLabels.map((_, j) => observed.some(row => row[j] !== null));
+  const cleanObserved = observed.map(row => row.filter((_, j) => validCols[j]));
+  const finalColLabels = colLabels.filter((_, j) => validCols[j]);
+
+  const r = cleanObserved.length;
+  const c = finalColLabels.length;
+  const rowTotals = cleanObserved.map(row => row.reduce((sum, val) => sum + (val ?? 0), 0));
+  const colTotals = Array(c).fill(0);
+  for (let j = 0; j < c; j++) {
+    for (let i = 0; i < r; i++) {
+      colTotals[j] += cleanObserved[i][j] ?? 0;
+    }
+  }
+  const grandTotal = rowTotals.reduce((a, b) => a + b, 0);
+
+  const expected = [];
+  for (let i = 0; i < r; i++) {
+    expected[i] = [];
+    for (let j = 0; j < c; j++) {
+      expected[i][j] = (rowTotals[i] * colTotals[j]) / grandTotal;
+    }
+  }
+
+  let chi2 = 0;
+  for (let i = 0; i < r; i++) {
+    for (let j = 0; j < c; j++) {
+      const O = cleanObserved[i][j] ?? 0;
+      const E = expected[i][j];
+      if (E > 0) {
+        chi2 += Math.pow(O - E, 2) / E;
+      }
+    }
+  }
+
+  const df = (r - 1) * (c - 1);
+  const p = 1 - jStat.chisquare.cdf(chi2, df);
+
+  let messages = '';
+
+  // Check for expected counts < 5
+  let smallExpected = false;
+  for (let i = 0; i < r; i++) {
+    for (let j = 0; j < c; j++) {
+      if (expected[i][j] < 5) {
+        smallExpected = true;
+        break;
+      }
+    }
+  }
+  if (smallExpected) {
+    messages += '<p style="color: red;"><strong>Warning:</strong> Some cells have an expected count less than 5. Chi-Square is suspect.</p>';
+  }
+
+  // Check for blanks in rows/columns with non-blank values
+  let blanksWarning = false;
+  for (let i = 0; i < cleanObserved.length; i++) {
+    let nonBlank = cleanObserved[i].some(v => v !== null);
+    let hasBlank = cleanObserved[i].some(v => v === null);
+    if (nonBlank && hasBlank) {
+      blanksWarning = true;
+      break;
+    }
+  }
+  if (!blanksWarning) {
+    for (let j = 0; j < cleanObserved[0].length; j++) {
+      let colHas = cleanObserved.map(row => row[j]);
+      let nonBlank = colHas.some(v => v !== null);
+      let hasBlank = colHas.some(v => v === null);
+      if (nonBlank && hasBlank) {
+        blanksWarning = true;
+        break;
+      }
+    }
+  }
+  if (blanksWarning) {
+    alert('Warning: Blank cells in partially filled rows or columns are treated as 0.');
+  }
+
+  // Check for minimum 2 rows and 2 columns
+  if (r < 2 || c < 2) {
+    alert('Error: At least two rows and two columns of data are required.');
+    return;
+  }
+
+  const alpha = parseFloat(document.getElementById('alphaInput').value);
+  const critical = jStat.chisquare.inv(1 - alpha, df);
+  const pColor = p < alpha ? 'green' : 'red';
+
+  document.getElementById('results').innerHTML = `<div style="line-height: 1.2;">
+  <span><strong>p-value:</strong> <span style="color:${pColor}; font-weight:bold;">${p.toFixed(6)}</span></span><br>
+  <span>Chi-Square Statistic: ${chi2.toFixed(4)}</span><br>
+  <span>Degrees of Freedom: ${df}</span><br>
+  <span>Critical Chi-Square Value: ${critical.toFixed(4)}</span>
+</div>
+<br>${messages}`;
+
+document.getElementById('results').style.display = 'block';
+document.getElementById('toggle-controls').style.display = 'block';
+const legend = document.getElementById('legend');
+  if (legend) legend.style.display = 'table';
+  window._lastExpected = expected;
+  window._lastValidRows = r;
+  window._lastValidCols = c;
+  
+  updateLegend(['Count']);
+window._shownMetrics = { expected: false, contrib: false, resid: false, stdresid: false };
+
+  while (table.rows.length > r + 1) table.deleteRow(-1);
+  for (let i = 0; i < table.rows.length; i++) {
+    while (table.rows[i].cells.length > c + 1) table.rows[i].deleteCell(-1);
+  }
+
+  const totalRow = table.insertRow(-1);
+  const labelCell = totalRow.insertCell(0);
+  labelCell.innerHTML = '<strong>Total</strong>';
+  for (let j = 0; j < c; j++) {
+    const cell = totalRow.insertCell(j + 1);
+    cell.innerHTML = colTotals[j] !== undefined ? '<strong>' + colTotals[j].toFixed(2) + '</strong>' : '';
+  }
+  const grandCell = totalRow.insertCell(-1);
+  grandCell.innerHTML = '<strong>' + grandTotal.toFixed(2) + '</strong>';
+
+  for (let i = 0; i < r; i++) {
+    const cell = table.rows[i + 1].insertCell(-1);
+    cell.innerHTML = rowTotals[i] !== undefined ? '<strong>' + rowTotals[i].toFixed(2) + '</strong>' : '';
+  }
+  const headerTotal = table.rows[0].insertCell(-1);
+  headerTotal.innerHTML = '<strong>Total</strong>';
+}
+
+function showExpected() {
+  if (window._shownMetrics.expected) return;
+  window._shownMetrics.expected = true;
+  window._legendOrder = window._legendOrder || [];
+  window._legendOrder.push('Expected');
+  const table = document.getElementById('data-table');
+  const expected = window._lastExpected;
+  const r = window._lastValidRows;
+  const c = window._lastValidCols;
+
+  for (let i = 1; i <= r; i++) {
+    for (let j = 1; j <= c; j++) {
+      const cell = table.rows[i].cells[j];
+      if (cell) {
+        const display = document.createElement('div');
+        display.className = 'expected';
+        display.textContent = `(${expected[i - 1][j - 1].toFixed(3)})`;
+        cell.appendChild(display);
+      }
+    }
+  }
+  document.getElementById('show-expected-btn').style.display = 'none';
+  updateLegend(['Count'].concat(window._legendOrder));
+}
+createTable();
+
+    
+function showContributions() {
+  if (window._shownMetrics.contrib) return;
+  window._shownMetrics.contrib = true;
+  window._legendOrder = window._legendOrder || [];
+  window._legendOrder.push('Contribution');
+  document.getElementById('show-contrib-btn').style.display = 'none';
+  const table = document.getElementById('data-table');
+  const expected = window._lastExpected;
+  const r = window._lastValidRows;
+  const c = window._lastValidCols;
+
+  for (let i = 1; i <= r; i++) {
+    for (let j = 1; j <= c; j++) {
+      const cell = table.rows[i].cells[j];
+      if (cell && !cell.innerHTML.includes('contrib')) {
+        const O = parseFloat(cell.firstChild.value);
+        const E = expected[i - 1][j - 1];
+        const contrib = E > 0 ? Math.pow(O - E, 2) / E : 0;
+        const display = document.createElement('div');
+        display.className = 'expected';
+        display.textContent = `(${contrib.toFixed(3)})`;
+        cell.appendChild(display);
+      }
+    }
+  }
+  updateLegend(['Count'].concat(window._legendOrder = window._legendOrder || []).filter((v, i, a) => a.indexOf(v) === i));
+}
+
+function showResiduals() {
+  if (window._shownMetrics.resid) return;
+  window._shownMetrics.resid = true;
+  window._legendOrder = window._legendOrder || [];
+  window._legendOrder.push('Residual');
+  document.getElementById('show-resid-btn').style.display = 'none';
+  const table = document.getElementById('data-table');
+  const expected = window._lastExpected;
+  const r = window._lastValidRows;
+  const c = window._lastValidCols;
+
+  for (let i = 1; i <= r; i++) {
+    for (let j = 1; j <= c; j++) {
+      const cell = table.rows[i].cells[j];
+      if (cell && !cell.innerHTML.includes('resid')) {
+        const O = parseFloat(cell.firstChild.value);
+        const E = expected[i - 1][j - 1];
+        const resid = O - E;
+        const display = document.createElement('div');
+        display.className = 'expected';
+        display.textContent = `(${resid.toFixed(3)})`;
+        cell.appendChild(display);
+      }
+    }
+  }
+  updateLegend(['Count'].concat(window._legendOrder));
+}
+
+function showStandardizedResiduals() {
+  if (window._shownMetrics.stdresid) return;
+  window._shownMetrics.stdresid = true;
+  window._legendOrder = window._legendOrder || [];
+  window._legendOrder.push('Standardized Residual');
+  document.getElementById('show-stdresid-btn').style.display = 'none';
+  const table = document.getElementById('data-table');
+  const expected = window._lastExpected;
+  const r = window._lastValidRows;
+  const c = window._lastValidCols;
+
+  for (let i = 1; i <= r; i++) {
+    for (let j = 1; j <= c; j++) {
+      const cell = table.rows[i].cells[j];
+      if (cell && !cell.innerHTML.includes('stdresid')) {
+        const O = parseFloat(cell.firstChild.value);
+        const E = expected[i - 1][j - 1];
+        const stdresid = E > 0 ? (O - E) / Math.sqrt(E) : 0;
+        const display = document.createElement('div');
+        display.className = 'expected';
+        display.textContent = `(${stdresid.toFixed(3)})`;
+        cell.appendChild(display);
+      }
+    }
+  }
+  updateLegend(['Count'].concat(Object.entries(window._shownMetrics).filter(([k, v]) => v).map(([k]) => {
+  return {
+    expected: 'Expected',
+    contrib: 'Contribution',
+    resid: 'Residual',
+    stdresid: 'Standardized Residual'
+  }[k];
+})));
+}
+
+function toggleOverlay(type) {
+  const table = document.getElementById('data-table');
+  const expected = window._lastExpected;
+  const r = window._lastValidRows;
+  const c = window._lastValidCols;
+  const checkbox = document.getElementById(`toggle-${type}`);
+  const labels = {
+    expected: 'Expected',
+    contrib: 'Chi-Square Contribution',
+    resid: 'Chi-Square Residual',
+    stdresid: 'Standardized Residual'
+  };
+
+  for (let i = 1; i <= r; i++) {
+    for (let j = 1; j <= c; j++) {
+      const cell = table.rows[i].cells[j];
+      const markerClass = `overlay-${type}`;
+      if (!cell) continue;
+
+      const existing = cell.querySelector(`.${markerClass}`);
+      if (existing) cell.removeChild(existing);
+
+      if (checkbox.checked) {
+        let value;
+        const O = parseFloat(cell.firstChild.value);
+        const E = expected[i - 1][j - 1];
+        if (type === 'expected') value = E.toFixed(3);
+        else if (type === 'contrib') value = E > 0 ? (Math.pow(O - E, 2) / E).toFixed(2) : '0.00';
+        else if (type === 'resid') value = (O - E).toFixed(2);
+        else if (type === 'stdresid') value = E > 0 ? ((O - E) / Math.sqrt(E)).toFixed(2) : '0.00';
+
+        const div = document.createElement('div');
+        div.className = `expected overlay-${type}`;
+        div.textContent = `(${value})`;
+        let overlays = Array.from(cell.querySelectorAll('div.expected'));
+        overlays.push(div);
+        overlays = [
+          overlays.find(el => el.classList.contains('overlay-expected')),
+          overlays.find(el => el.classList.contains('overlay-contrib')),
+          overlays.find(el => el.classList.contains('overlay-resid')),
+          overlays.find(el => el.classList.contains('overlay-stdresid'))
+        ].filter(Boolean);
+        cell.querySelectorAll('div.expected').forEach(e => cell.removeChild(e));
+        overlays.forEach(e => cell.appendChild(e));
+      }
+    }
+  }
+
+  const order = ['expected', 'contrib', 'resid', 'stdresid'];
+  const shown = order.filter(key => document.getElementById(`toggle-${key}`).checked);
+  const legendLabels = ['Count'].concat(shown.map(key => labels[key]));
+  updateLegend(legendLabels);
+}
+
+createTable();
+</script>
+    </div>
+<!-- End full GUI wrapper -->
+  </div>
+</body>
+</html>

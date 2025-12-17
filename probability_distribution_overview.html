@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Probability Distributions Overview</title>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script type="text/javascript" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      vertical-align: top;
+    }
+    th {
+      background-color: #f2f2f2;
+      text-align: left;
+    }
+    td {
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Probability Distributions Overview</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Distribution</th>
+        <th>Description</th>
+        <th>PDF/PMF Equation</th>
+        <th>General Use Case</th>
+        <th>Detailed Example</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Beta</td><td>A continuous distribution defined on the interval \( [0, 1] \), often used to model probabilities and proportions. Controlled by two shape parameters \( \alpha \) and \( \beta \).</td><td>\( f(x; \alpha, \beta) = \frac{x^{\alpha - 1}(1 - x)^{\beta - 1}}{B(\alpha, \beta)} \), for \( 0 < x < 1 \)</td><td>Modeling proportions and probabilities.</td><td>In digital marketing, an advertiser may estimate the probability that a user will click on an ad using a Beta distribution, updating beliefs as more data comes in.</td></tr>
+      <tr><td>Chi-Square</td><td>A continuous distribution commonly used in hypothesis testing and confidence interval estimation for variance and categorical data.</td><td>\( f(x; k) = \frac{1}{2^{k/2} \Gamma(k/2)} x^{k/2 - 1} e^{-x/2} \), for \( x > 0 \)</td><td>Analyzing categorical data and variability.</td><td>In a genetics study, a chi-square test can determine if the observed distribution of traits matches the expected Mendelian ratio.</td></tr>
+      <tr><td>Cauchy</td><td>A continuous distribution with heavy tails and undefined mean and variance. It arises in ratios of normally distributed variables.</td><td>\( f(x; x_0, \gamma) = \frac{1}{\pi \gamma \left[1 + \left(\frac{x - x_0}{\gamma}\right)^2\right]} \)</td><td>Modeling resonance and peak effects.</td><td>In spectroscopy, the Cauchy distribution can model the shape of spectral lines affected by resonance broadening.</td></tr>
+      <tr><td>Exponential</td><td>Models the time between independent events occurring at a constant rate. Memoryless property.</td><td>\( f(x; \lambda) = \lambda e^{-\lambda x},\ x \ge 0 \)</td><td>Modeling time until an event occurs.</td><td>A call center may use the exponential distribution to model the time between incoming customer support calls.</td></tr>
+      <tr><td>F</td><td>A ratio of two scaled chi-square distributions, used primarily in analysis of variance (ANOVA).</td><td>\( f(x; d_1, d_2) = \frac{(d_1 x)^{d_1/2} d_2^{d_2/2}}{x (d_1 x + d_2)^{(d_1 + d_2)/2} B(d_1/2, d_2/2)} \)</td><td>Comparing variability across groups.</td><td>In an educational study, an F-test may compare student test score variances across different teaching methods.</td></tr>
+      <tr><td>Gamma</td><td>A two-parameter family of continuous distributions useful for modeling waiting times.</td><td>\( f(x; \alpha, \beta) = \frac{\beta^\alpha x^{\alpha - 1} e^{-\beta x}}{\Gamma(\alpha)} \)</td><td>Modeling positive continuous data with skew.</td><td>An insurance company uses the Gamma distribution to model the size and frequency of claims filed in a given period.</td></tr>
+      <tr><td>Lognormal</td><td>A distribution of a variable whose logarithm is normally distributed.</td><td>\( f(x; \mu, \sigma) = \frac{1}{x \sigma \sqrt{2\pi}} e^{-\frac{(\ln x - \mu)^2}{2\sigma^2}} \), \( x > 0 \)</td><td>Modeling skewed data with a lower bound.</td><td>Economists may use the lognormal distribution to estimate the distribution of household incomes within a region.</td></tr>
+      <tr><td>Normal</td><td>A symmetric, bell-shaped distribution characterized by its mean and standard deviation.</td><td>\( f(x; \mu, \sigma) = \frac{1}{\sigma \sqrt{2\pi}} e^{-\frac{(x - \mu)^2}{2\sigma^2}} \)</td><td>Modeling symmetric natural variation.</td><td>In quality control, the normal distribution models the variability in manufacturing dimensions of a machined part.</td></tr>
+      <tr><td>T-Distribution</td><td>A distribution used instead of the normal distribution when sample sizes are small and population standard deviation is unknown.</td><td>\( f(t; \nu) = \frac{\Gamma((\nu+1)/2)}{\sqrt{\nu \pi} \Gamma(\nu/2)} \left(1 + \frac{t^2}{\nu}\right)^{-(\nu+1)/2} \)</td><td>Estimating means from small samples.</td><td>A researcher uses the t-distribution to construct a confidence interval for the mean height of a plant species based on a small sample of 10 measurements.</td></tr>
+      <tr><td>Uniform</td><td>A distribution where all outcomes are equally likely over a certain interval \( [a, b] \).</td><td>\( f(x) = \frac{1}{b - a},\ a \le x \le b \)</td><td>Modeling equally likely outcomes.</td><td>In simulations, software may generate random times between tasks using a uniform distribution between 1 and 5 minutes.</td></tr>
+      <tr><td>Weibull</td><td>A flexible distribution used for modeling lifetimes and failure rates.</td><td>\( f(x; k, \lambda) = \frac{k}{\lambda} \left(\frac{x}{\lambda}\right)^{k - 1} e^{-(x/\lambda)^k} \)</td><td>Modeling life durations and reliability.</td><td>An engineer models the lifetime of ball bearings in an industrial machine using the Weibull distribution to predict maintenance schedules.</td></tr>
+    </tbody>
+  </table>
+</body>
+</html>

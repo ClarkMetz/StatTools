@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confidence Interval Calculator</title>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6">
+</script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    .button-group button.active {
+      background-color: #4285f4;
+      color: white;
+      border: 1px solid #3367d6;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 40px;
+    }
+    .container {
+      border: 2px solid #ccc;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 700px;
+      width: 100%;
+      background-color: #fafafa;
+      text-align: center;
+    }
+    .button-group button {
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    .input-group {
+      margin-bottom: 10px;
+      text-align: left;
+    }
+    label {
+      display: inline-block;
+      width: 250px;
+    }
+    select#knowPopSD {
+      font-size: 0.9em;
+      width: auto;
+    }
+    label[for="knowPopSD"] {
+      font-size: 0.9em;
+    }
+    input, select {
+      padding: 4px;
+    }
+    .result-box {
+      background-color: #f4f4f4;
+      padding: 15px;
+      margin-top: 20px;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .bold-interval {
+      font-weight: bold;
+      display: block;
+      margin-top: 10px;
+    }
+    .formula-text {
+      margin-top: 10px;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Confidence Interval Calculator</h2>
+
+    <div class="button-group" style="display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px;">
+  <button onclick="selectType('proportion')" data-type="proportion" style="height: 45px;">Proportion</button>
+  <button onclick="selectType('mean')" data-type="mean" style="height: 45px;">Mean</button>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <button onclick="selectType('difference')" data-type="difference" style="width: 250px; margin-bottom: 5px;">Difference Between Two Means</button>
+    <button onclick="selectType('diffprop')" data-type="diffprop" style="width: 250px;">Difference Between Two Proportions</button>
+  </div>
+  <button onclick="selectType('stddev')" data-type="stddev" style="height: 45px;">Standard Deviation</button>
+</div>
+
+    <div id="inputSection" class="section"></div>
+    <div id="result" class="section"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
+  <script>
+    let currentType = "";
+
+    function createLabeledInput(id, labelText, type = "number", step = "any") {
+      return `<div class="input-group">
+                <label for="${id}">${labelText}</label>
+                <input id="${id}" name="${id}" type="${type}" step="${step}" />
+              </div>`;
+    }
+
+    function selectType(type) {
+      const buttons = document.querySelectorAll('.button-group button');
+      buttons.forEach(btn => btn.classList.remove('active'));
+      const allButtons = document.querySelectorAll('.button-group button');
+      allButtons.forEach(btn => btn.classList.remove('active'));
+      const clickedButton = Array.from(buttons).find(btn => btn.dataset.type === type);
+      if (clickedButton) clickedButton.classList.add('active');
+      currentType = type;
+      let html = '';
+      if (type === 'proportion') {
+        html = createLabeledInput("successes", "Number of Successes:") +
+               createLabeledInput("total", "Total Sample Size:") +
+               createLabeledInput("confLevel", "Confidence Level (%):");
+
+      } else if (type === 'mean') {
+        html = createLabeledInput("mean", "Sample Mean:") +
+               createLabeledInput("size", "Sample Size (n):") +
+               `<div class="input-group">
+                  <label for="knowPopSD">Do you know the population SD?</label>
+                  <select id="knowPopSD" onchange="toggleSDInput()">
+                    <option value="no">No</option>
+                    <option value="yes">Yes</option>
+                  </select>
+                </div>` +
+               `<div id="sdInputs">
+                  ${createLabeledInput("sampleSD", "Sample SD (s):")}
+                </div>` +
+               createLabeledInput("confLevel", "Confidence Level (%):");
+
+      } else if (type === 'difference') {
+        html = createLabeledInput("mean1", "Mean 1 (x̄₁):") +
+               createLabeledInput("sd1", "SD 1 (s₁):") +
+               createLabeledInput("n1", "Size 1 (n₁):") +
+               createLabeledInput("mean2", "Mean 2 (x̄₂):") +
+               createLabeledInput("sd2", "SD 2 (s₂):") +
+               createLabeledInput("n2", "Size 2 (n₂):") +
+               `<div class="input-group" style="display: flex; align-items: center; gap: 10px;">
+  <label style="width: auto;">Degrees of Freedom Method:</label>
+  <label style="margin: 0;"><input type="radio" name="dfOption" value="unequal" checked> Unequal Variances (recommended)</label>
+  <label style="margin: 0;"><input type="radio" name="dfOption" value="equal"> Equal Variances (pooled)</label>
+  <label style="margin: 0;"><input type="radio" name="dfOption" value="simplified"> Simplified (min)</label>
+</div>` +
+               createLabeledInput("confLevel", "Confidence Level (%):");
+
+      } else if (type === 'stddev') {
+        html = createLabeledInput("sampleSD", "Sample SD (s):") +
+               createLabeledInput("size", "Sample Size (n):") +
+               createLabeledInput("confLevel", "Confidence Level (%):");
+      } else if (type === 'diffprop') {
+  html = createLabeledInput("x1", "Sample 1 Successes (x₁):") +
+         createLabeledInput("n1", "Sample 1 Size (n₁):") +
+         createLabeledInput("x2", "Sample 2 Successes (x₂):") +
+         createLabeledInput("n2", "Sample 2 Size (n₂):") +
+         createLabeledInput("confLevel", "Confidence Level (%):");
+}
+      
+      html += `<button onclick="calculate()">Calculate</button>`;
+      document.getElementById("inputSection").innerHTML = html;
+      document.getElementById("result").innerHTML = "";
+
+      // New: clear results when any input/select changes
+      document.querySelectorAll('#inputSection input, #inputSection select').forEach(el => {
+        el.addEventListener('input', () => {
+          document.getElementById('result').innerHTML = '';
+        });
+      });
+    }
+
+    function toggleSDInput() {
+      const knowPop = document.getElementById("knowPopSD").value;
+      const sdInputs = document.getElementById("sdInputs");
+      if (knowPop === "yes") {
+        sdInputs.innerHTML = createLabeledInput("popSD", "Population SD (σ):");
+      } else {
+        sdInputs.innerHTML = createLabeledInput("sampleSD", "Sample SD (s):");
+      }
+    }
+
+    function calculate() {
+      function getValue(id) {
+        const el = document.getElementById(id);
+        if (!el || el.value.trim() === '') {
+          alert(`Please enter a value for ${id.replace(/([A-Z])/g, ' $1')}`);
+          throw new Error(`Missing value: ${id}`);
+        }
+        return parseFloat(el.value);
+      }
+      const confLevel = getValue("confLevel");
+      if (!isNaN(confLevel) && confLevel <= 1) {
+        alert("Confidence level should be greater than 1 and entered as a percentage. i.e. 95% confidence should be entered as 95");
+        return;
+      }
+      if (confLevel <= 0 || confLevel >= 100) {
+        alert("Confidence level must be between 0 and 100.");
+        return;
+      }
+      const alpha = 1 - confLevel / 100;
+      const z = jStat.normal.inv(1 - alpha / 2, 0, 1);
+      let resultHTML = '';
+
+      function renderMath(formulaLatex, numericLatex, intervalText) {
+        const toggleHTML = `<div style='text-align:left; font-size: 0.85em;'><a href='#' onclick='toggleFormula(event)' id='toggle-link'>Show/Hide Formula</a></div>`;
+        const formulaContent = `<div id='formula-box' style='display:none;'>
+          <div class='formula-text'>
+            <div>$$${formulaLatex}$$</div>
+            <div>$$${numericLatex}$$</div>
+          </div>
+        </div>`;
+        return `
+          ${toggleHTML}
+          <div class=\"result-box\">
+          ${formulaContent}
+          <div class=\"bold-interval\">${intervalText}</div>
+          </div>
+        `;
+      }
+
+      if (currentType === 'proportion') {
+        const successes = getValue("successes");
+        const total = getValue("total");
+        if (isNaN(successes) || isNaN(total) || total <= 0 || successes > total) {
+          resultHTML = '<p class="error">Enter valid numbers: 0 ≤ Successes ≤ Total</p>';
+        } else {
+          const phat = successes / total;
+          const se = Math.sqrt(phat * (1 - phat) / total);
+          const margin = z * se;
+          const lower = (phat - margin).toFixed(4);
+          const upper = (phat + margin).toFixed(4);
+
+          const formula = "\\hat{p} \\pm z^* \\sqrt{\\frac{\\hat{p}(1 - \\hat{p})}{n}}";
+          const numeric = `${phat.toFixed(4)} \\pm ${z.toFixed(4)} \\times ${se.toFixed(4)}`;
+
+
+          resultHTML = renderMath(formula, numeric, `Confidence Interval: (${lower}, ${upper})`);
+        }
+      } else if (currentType === 'mean') {
+        const mean = getValue("mean");
+        const n = getValue("size");
+        if (n <= 0) {
+          resultHTML = '<p class="error">Sample size must be positive.</p>';
+        } else {
+          const knowPop = document.getElementById("knowPopSD").value;
+          let se, statVal, formula, numeric;
+          if (knowPop === "yes") {
+            const sigma = getValue("popSD");
+            if (sigma <= 0) {
+              resultHTML = '<p class="error">Population SD must be positive.</p>';
+            } else {
+              se = sigma / Math.sqrt(n);
+              statVal = z;
+              formula = "\\bar{x} \\pm z^* \\frac{\\sigma}{\\sqrt{n}}";
+              numeric = `${mean.toFixed(4)} \\pm ${z.toFixed(4)} \\times ${se.toFixed(4)}`;
+            }
+          } else {
+            const s = getValue("sampleSD");
+            if (s <= 0) {
+              resultHTML = '<p class="error">Sample SD must be positive.</p>';
+            } else {
+              se = s / Math.sqrt(n);
+              const t = jStat.studentt.inv(1 - alpha / 2, n - 1);
+              statVal = t;
+              formula = `\\bar{x} \\pm t^*_{${n - 1}} \\frac{s}{\\sqrt{n}}`;
+              numeric = `${mean.toFixed(4)} \\pm ${t.toFixed(4)} \\times ${se.toFixed(4)}`;
+            }
+          }
+          if (se && statVal) {
+            const margin = statVal * se;
+            const lower = (mean - margin).toFixed(4);
+            const upper = (mean + margin).toFixed(4);
+            resultHTML = renderMath(formula, numeric, `Confidence Interval: (${lower}, ${upper})`);
+          }
+        }
+      } else if (currentType === 'difference') {
+        const m1 = getValue("mean1");
+        const s1 = getValue("sd1");
+        const n1 = getValue("n1");
+        const m2 = getValue("mean2");
+        const s2 = getValue("sd2");
+        const n2 = getValue("n2");
+        if ([n1, n2].some(n => n <= 0) || [s1, s2].some(s => s <= 0)) {
+          resultHTML = '<p class="error">All sample sizes and SDs must be positive.</p>';
+        } else {
+          const diff = m1 - m2;
+          const se = Math.sqrt(s1 ** 2 / n1 + s2 ** 2 / n2);
+          const dfOption = document.querySelector('input[name="dfOption"]:checked').value;
+          let df;
+          if (dfOption === 'unequal') {
+            const num = Math.pow((s1 ** 2 / n1 + s2 ** 2 / n2), 2);
+            const denom = (Math.pow(s1 ** 2 / n1, 2) / (n1 - 1)) + (Math.pow(s2 ** 2 / n2, 2) / (n2 - 1));
+            df = num / denom;
+          } else if (dfOption === 'equal') {
+            df = n1 + n2 - 2;
+          } else {
+            df = Math.min(n1 - 1, n2 - 1);
+          }
+          const t = jStat.studentt.inv(1 - alpha / 2, df);
+          const margin = t * se;
+          const lower = (diff - margin).toFixed(4);
+          const upper = (diff + margin).toFixed(4);
+          const formula = `(\\bar{x}_1 - \\bar{x}_2) \\pm t^*_{${df.toFixed(2)}} \\sqrt{\\frac{s_1^2}{n_1} + \\frac{s_2^2}{n_2}} \\quad (df = ${df.toFixed(2)})`;
+          const numeric = `${diff.toFixed(4)} \\pm ${t.toFixed(4)} \\times ${se.toFixed(4)}`;
+
+          resultHTML = renderMath(formula, numeric, `Confidence Interval: (${lower}, ${upper})`);
+        }
+      }
+    else if (currentType === 'diffprop') {
+          const x1 = getValue("x1");
+          const n1 = getValue("n1");
+          const x2 = getValue("x2");
+          const n2 = getValue("n2");
+          if ([x1, x2].some(x => x < 0) || [n1, n2].some(n => n <= 0) || x1 > n1 || x2 > n2) {
+            resultHTML = '<p class="error">Enter valid success counts and sample sizes.</p>';
+          } else {
+            const p1 = x1 / n1;
+            const p2 = x2 / n2;
+            const diff = p1 - p2;
+            const se = Math.sqrt((p1 * (1 - p1)) / n1 + (p2 * (1 - p2)) / n2);
+            const margin = z * se;
+            const lower = (diff - margin).toFixed(4);
+            const upper = (diff + margin).toFixed(4);
+            const formula = `(\\hat{p}_1 - \\hat{p}_2) \\pm z^* \\sqrt{\\frac{\\hat{p}_1(1 - \\hat{p}_1)}{n_1} + \\frac{\\hat{p}_2(1 - \\hat{p}_2)}{n_2}}`;
+            const numeric = `${diff.toFixed(4)} \\pm ${z.toFixed(4)} \\times ${se.toFixed(4)}`;
+            resultHTML = renderMath(formula, numeric, `Confidence Interval: (${lower}, ${upper})`);
+          }
+        
+
+      } else if (currentType === 'stddev') {
+        const s = getValue("sampleSD");
+        const n = getValue("size");
+        if (s <= 0 || n <= 1) {
+          resultHTML = '<p class="error">Sample SD must be positive and n > 1.</p>';
+        } else {
+          const df = n - 1;
+          const chi2Lower = jStat.chisquare.inv(1 - alpha / 2, df);
+          const chi2Upper = jStat.chisquare.inv(alpha / 2, df);
+          const lower = Math.sqrt((df * s * s) / chi2Lower).toFixed(4);
+          const upper = Math.sqrt((df * s * s) / chi2Upper).toFixed(4);
+          const formula = `\\sqrt{\\frac{(n - 1)s^2}{\\chi^2_{n-1, α/2}}} < \\sigma < \\sqrt{\\frac{(n - 1)s^2}{\\chi^2_{n-1, 1- α/2}}}`;
+
+          const numeric = `\\sqrt{\\frac{(${df})(${s.toFixed(4)})^2}{${chi2Upper.toFixed(4)}}} < \\sigma < \\sqrt{\\frac{(${df})(${s.toFixed(4)})^2}{${chi2Lower.toFixed(4)}}}`;
+
+          resultHTML = renderMath(formula, numeric, `Confidence Interval: (${lower}, ${upper})`);
+        }
+      }
+
+      document.getElementById("result").innerHTML = resultHTML;
+      if (window.MathJax) MathJax.typesetPromise();
+      if (window.MathJax) MathJax.typesetPromise();
+    }
+  
+    function toggleFormula(event) {
+    event.preventDefault();
+    const formulaBox = document.getElementById("formula-box");
+    if (formulaBox.style.display === "none") {
+      formulaBox.style.display = "block";
+    } else {
+      formulaBox.style.display = "none";
+    }
+}
+  </script>
+</body>
+</html>
+
+
+
+

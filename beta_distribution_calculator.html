@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beta Distribution Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 700px;
+      margin: auto;
+      background-color: white;
+    }
+    h2 {
+      text-align: center;
+    }
+    .input-group {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    label {
+      white-space: nowrap;
+    }
+    input {
+      width: 80px;
+      padding: 5px;
+    }
+    .button-group {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .button-group button {
+      margin: 0 5px;
+      padding: 5px 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    #distributionChart {
+      max-width: 600px;
+      margin: 20px auto;
+    }
+  </style>
+</head>
+<body>
+  <h2>Beta Distribution Calculator</h2>
+  <div class="button-group">
+    <button id="standardButton" class="active" onclick="setMode('standard')">Standard</button>
+    <button id="betweenButton" onclick="setMode('between')">Between</button>
+  </div>
+
+  <div class="input-group">
+    <label for="alpha">α:</label>
+    <input type="number" id="alpha" value="2" step="0.01" min="0.01">
+    <label for="beta">β:</label>
+    <input type="number" id="beta" value="2" step="0.01" min="0.01">
+  </div>
+
+  <div id="standard-inputs" class="input-group">
+    <label>P(X
+      <select id="comparison">
+        <option value="less">≤</option>
+        <option value="greater">≥</option>
+      </select>
+    </label>
+    <input type="number" id="x" step="0.0001">
+    =
+    <input type="number" id="probability" step="0.0001">
+  </div>
+
+  <div id="between-inputs" class="input-group" style="display:none">
+    <label>P(</label>
+    <input type="number" id="lower-x" step="0.0001">
+    ≤ X ≤
+    <input type="number" id="upper-x" step="0.0001">
+    =
+    <input type="number" id="between-probability" step="0.0001">
+  </div>
+
+  <div style="text-align:center">
+    <button onclick="calculate()">Compute</button>
+  </div>
+
+  <canvas id="distributionChart" width="600" height="300"></canvas>
+
+  <script>
+    let mode = 'standard';
+    let chart;
+
+    function setMode(selected) {
+      mode = selected;
+      document.getElementById('standard-inputs').style.display = (selected === 'standard') ? 'flex' : 'none';
+      document.getElementById('between-inputs').style.display = (selected === 'between') ? 'flex' : 'none';
+    }
+
+    function calculate() {
+      const alpha = parseFloat(document.getElementById('alpha').value);
+      const beta = parseFloat(document.getElementById('beta').value);
+      if (alpha <= 0 || beta <= 0) {
+        alert('α and β must be > 0');
+        return;
+      }
+
+      const x = parseFloat(document.getElementById('x').value);
+      const pInput = document.getElementById('probability');
+      const comparison = document.getElementById('comparison').value;
+      const lowerX = parseFloat(document.getElementById('lower-x').value);
+      const upperX = parseFloat(document.getElementById('upper-x').value);
+      const betweenP = document.getElementById('between-probability');
+
+      if (mode === 'standard') {
+        if (!isNaN(x)) {
+          let prob = comparison === 'less' ? jStat.beta.cdf(x, alpha, beta) : 1 - jStat.beta.cdf(x, alpha, beta);
+          pInput.value = prob.toFixed(6);
+          drawChart(alpha, beta, comparison === 'less' ? x : null, comparison === 'greater' ? x : null);
+        } else if (!isNaN(parseFloat(pInput.value))) {
+          let p = parseFloat(pInput.value);
+          let val = comparison === 'less' ? jStat.beta.inv(p, alpha, beta) : jStat.beta.inv(1 - p, alpha, beta);
+          document.getElementById('x').value = val.toFixed(6);
+          drawChart(alpha, beta, comparison === 'less' ? val : null, comparison === 'greater' ? val : null);
+        }
+      } else {
+        if (!isNaN(lowerX) && !isNaN(upperX)) {
+          let p = jStat.beta.cdf(upperX, alpha, beta) - jStat.beta.cdf(lowerX, alpha, beta);
+          betweenP.value = p.toFixed(6);
+          drawChart(alpha, beta, lowerX, upperX);
+        } else if (!isNaN(parseFloat(betweenP.value))) {
+  const targetP = parseFloat(betweenP.value);
+  const mid = jStat.beta.mean(alpha, beta);
+  let lowerGuess = mid - 0.1;
+  let upperGuess = mid + 0.1;
+  lowerGuess = Math.max(0, lowerGuess);
+  upperGuess = Math.min(1, upperGuess);
+  let found = false;
+  for (let delta = 0.05; delta < 0.5; delta += 0.001) {
+    const l = Math.max(0, mid - delta);
+    const u = Math.min(1, mid + delta);
+    const prob = jStat.beta.cdf(u, alpha, beta) - jStat.beta.cdf(l, alpha, beta);
+    if (Math.abs(prob - targetP) < 0.0001) {
+      document.getElementById('lower-x').value = l.toFixed(6);
+      document.getElementById('upper-x').value = u.toFixed(6);
+      drawChart(alpha, beta, l, u);
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    alert("Could not estimate interval for given probability.");
+  }
+}
+      }
+    }
+
+    function drawChart(alpha, beta, lower = null, upper = null) {
+      const ctx = document.getElementById('distributionChart').getContext('2d');
+      const step = 0.01;
+      const data = [];
+      const shaded = [];
+      for (let x = 0; x <= 1; x += step) {
+        let y = jStat.beta.pdf(x, alpha, beta);
+        data.push({x, y});
+        if ((lower !== null && x <= lower && upper === null) ||
+        (upper !== null && x >= upper && lower === null) ||
+            (lower !== null && upper !== null && x >= lower && x <= upper)) {
+          shaded.push({x, y});
+        }
+      }
+
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [
+            {
+              label: `Beta(α=${alpha}, β=${beta})`,
+              data: data,
+              borderColor: 'blue',
+              fill: false,
+              pointRadius: 0,
+              tension: 0.2
+            },
+            {
+              label: 'Shaded Region',
+              data: shaded,
+              backgroundColor: 'rgba(0, 0, 255, 0.3)',
+              borderColor: 'rgba(0,0,0,0)',
+              fill: true,
+              pointRadius: 0,
+              type: 'line'
+            }
+          ]
+        },
+        options: {
+          scales: {
+            x: { type: 'linear', min: 0, max: 1, title: { display: true, text: 'X' } },
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+  setMode('standard');
+  const alpha = parseFloat(document.getElementById('alpha').value);
+  const beta = parseFloat(document.getElementById('beta').value);
+  drawChart(alpha, beta);
+});
+  </script>
+</body>
+</html>

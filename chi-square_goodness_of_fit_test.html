@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chi-Square Goodness of Fit Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 40px;
+      background-color: white;
+    }
+    .container {
+      border: 2px solid #ccc;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 700px;
+      width: 100%;
+      background-color: #fafafa;
+      text-align: center;
+    }
+    .table-wrapper {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      position: relative;
+    }
+    .table-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-right: 10px;
+      margin-top: 48px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+    .cell-input {
+      width: 100px;
+      text-align: center;
+      padding: 4px;
+    }
+    button {
+      padding: 6px 12px;
+      margin: 5px;
+      border: 1px solid #ccc;
+      background-color: #e7e7e7;
+      cursor: pointer;
+      font-size: 14px;
+      border-radius: 4px;
+    }
+    button:hover {
+      background-color: #d5d5d5;
+    }
+    .result-box {
+      background-color: #f4f4f4;
+      padding: 15px;
+      margin-top: 20px;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .equal-control {
+      margin-top: 10px;
+      text-align: right;
+    }
+  .shake {
+      animation: shake 0.5s;
+    }
+    @keyframes shake {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      50% { transform: translateX(5px); }
+      75% { transform: translateX(-5px); }
+      100% { transform: translateX(0); }
+    }
+</style>
+</head>
+<body>
+<div class="container mt-4 text-center">
+  <h3>Chi-Square Goodness of Fit Test</h3>
+  <div style="margin-bottom: 10px;">
+    <label for="alphaInput">Significance Level: α = </label>
+    <input type="number" id="alphaInput" value="0.05" step="0.001" min="0" max="1" style="width: 80px;">
+  </div>
+  <button onclick="fullReset()">Reset</button>
+
+  <div class="table-wrapper">
+    <div class="table-controls">
+      <button onclick="removeRow()">−</button>
+      <button onclick="addRow()">+</button>
+    </div>
+
+    <div style="width: 100%;">
+      <table class="table table-bordered text-center">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Observed</th>
+            <th>Expected</th>
+          </tr>
+        </thead>
+        <tbody id="data-table"></tbody>
+      </table>
+      <div class="equal-control">
+        <button onclick="equalProportion()">Equal Proportion</button>
+      </div>
+    </div>
+  </div>
+
+  <button id="calculateBtn" onclick="calculateChiSquare()" disabled>Calculate</button>
+  <div id="checkbox-controls"></div>
+  <div id="results" class="result-box mx-auto" style="max-width: 300px; margin-left: auto; margin-right: auto; display: none;"></div>
+  <div id="message" style="display:none; margin-top:10px; color:red; font-weight:bold;"></div>
+</div>
+<script>
+  let rowCount = 6;
+  const minRows = 2;
+
+  function createTable() {
+    let table = document.getElementById('data-table');
+    table.innerHTML = '';
+    for (let i = 1; i <= rowCount; i++) {
+      table.innerHTML += `<tr>
+        <td contenteditable="true">Category ${i}</td>
+        <td><input type="number" class="cell-input form-control" min="0"></td>
+        <td><input type="number" class="cell-input form-control" min="0"></td>
+      </tr>`;
+    }
+  }
+
+  function addRow() {
+    let table = document.getElementById('data-table');
+    let existingData = Array.from(table.rows).map(row => [
+      row.cells[0].innerText,
+      row.cells[1].querySelector('input').value,
+      row.cells[2].querySelector('input').value
+    ]);
+    rowCount++;
+    createTable();
+    existingData.forEach((row, i) => {
+      if (i < rowCount - 1) {
+        table.rows[i].cells[0].innerText = row[0];
+        table.rows[i].cells[1].querySelector('input').value = row[1];
+        table.rows[i].cells[2].querySelector('input').value = row[2];
+      }
+    });
+  }
+
+  function removeRow() {
+    if (rowCount > minRows) {
+      let table = document.getElementById('data-table');
+      let existingData = Array.from(table.rows).map(row => [
+        row.cells[0].innerText,
+        row.cells[1].querySelector('input').value,
+        row.cells[2].querySelector('input').value
+      ]);
+      rowCount--;
+      createTable();
+      existingData.slice(0, rowCount).forEach((row, i) => {
+        table.rows[i].cells[0].innerText = row[0];
+        table.rows[i].cells[1].querySelector('input').value = row[1];
+        table.rows[i].cells[2].querySelector('input').value = row[2];
+      });
+    }
+  }
+
+  function equalProportion() {
+    const observedInputs = document.querySelectorAll('tbody tr td:nth-child(2) input');
+    const expectedInputs = document.querySelectorAll('tbody tr td:nth-child(3) input');
+    let totalObserved = 0;
+    let validCount = 0;
+    observedInputs.forEach(input => {
+      const value = parseFloat(input.value);
+      if (!isNaN(value)) {
+        totalObserved += value;
+        validCount++;
+      }
+    });
+    const equalValue = totalObserved / validCount;
+    observedInputs.forEach((input, index) => {
+      const obs = parseFloat(input.value);
+      if (!isNaN(obs)) {
+        expectedInputs[index].value = equalValue.toFixed(6);
+      } else {
+        expectedInputs[index].value = '';
+      }
+    });
+  }
+
+  let calculatedOnce = false;
+
+function calculateChiSquare() {
+    const observedInputs = document.querySelectorAll('tbody tr td:nth-child(2) input');
+    const expectedInputs = document.querySelectorAll('tbody tr td:nth-child(3) input');
+    const tableRows = document.querySelectorAll('tbody tr');
+
+    // Validate first
+    for (let i = 0; i < tableRows.length; i++) {
+      let obs = parseFloat(observedInputs[i].value);
+      let exp = parseFloat(expectedInputs[i].value);
+
+      if (isNaN(obs)) continue; // skip row deletion here
+      if (isNaN(exp) || exp === 0) {
+        showMessage('Please complete the expected values or use the autofill option.');
+        return;
+      }
+    }
+
+    // Clear prior extra columns and checkbox UI
+    document.getElementById('checkbox-controls').innerHTML = '';
+    const headers = document.querySelector('thead tr');
+    ['col-expected', 'col-residual', 'col-standardized', 'col-contrib'].forEach(colId => {
+      const colIndex = Array.from(headers.cells).findIndex(cell => cell.dataset.colId === colId);
+      if (colIndex !== -1) {
+        headers.deleteCell(colIndex);
+        Array.from(document.getElementById('data-table').rows).forEach(row => row.deleteCell(colIndex));
+      }
+    });
+
+ let observed = [];
+    let expected = [];
+
+    for (let i = 0; i < tableRows.length; i++) {
+      let obs = parseFloat(observedInputs[i].value);
+      let exp = parseFloat(expectedInputs[i].value);
+      if (isNaN(obs)) {
+        tableRows[i].remove();
+        rowCount--;
+        continue;
+      }
+      if (isNaN(exp) || exp === 0) {
+        showMessage('Expected values must be filled in and non-zero.');
+        return;
+      }
+      observed.push(obs);
+      expected.push(exp);
+    }
+      
+    if (rowCount < minRows) {
+      showMessage('At least two valid observed values are required.');
+      location.reload();
+      return;
+    }
+    const totalObserved = observed.reduce((a, b) => a + b, 0);
+    const totalExpected = expected.reduce((a, b) => a + b, 0);
+    if (Math.abs(totalObserved - totalExpected) > 0.5) {
+      
+      showMessage(`The total of observed values (${totalObserved}) does not match the total of expected values (${totalExpected.toFixed(2)}). These must be equal for a valid test.`);
+      return;
+    }
+    let chiSquare = observed.reduce((acc, obs, idx) => acc + Math.pow(obs - expected[idx], 2) / expected[idx], 0);
+    let df = rowCount - 1;
+    let pValue = 1 - jStat.chisquare.cdf(chiSquare, df);
+    let sampleSize = observed.reduce((a, b) => a + b, 0);
+    const resultsBox = document.getElementById('results');
+    if (!resultsBox) return;
+    const alpha = parseFloat(document.getElementById('alphaInput').value);
+    const pClass = pValue < alpha ? 'color:green;font-weight:bold;' : 'color:red;font-weight:bold;';
+    const criticalValue = jStat.chisquare.inv(1 - alpha, df);
+    resultsBox.innerHTML = `<strong>P-value:</strong> <span style="${pClass}">${pValue.toFixed(6)}</span><br>
+      Chi-square statistic: ${chiSquare.toFixed(6)}<br><br>
+      Critical Chi-Square Value: ${criticalValue.toFixed(6)}<br>
+      Degrees of freedom (df): ${df}<br>
+      Sample Size: ${sampleSize}`;
+    resultsBox.style.display = 'block';
+    resultsBox.classList.add('shake');
+    setTimeout(() => resultsBox.classList.remove('shake'), 500);
+
+
+    // Restore columns based on checked boxes
+    const checkboxStates = {
+  contrib: document.querySelector('input[type="checkbox"][onchange*="contrib"]')?.checked || false,
+  residual: document.querySelector('input[type="checkbox"][onchange*="residual"]')?.checked || false,
+  standardized: document.querySelector('input[type="checkbox"][onchange*="standardized"]')?.checked || false
+};
+    for (let key in checkboxStates) {
+      const desired = checkboxStates[key];
+      const columnId = `col-${key}`;
+      const alreadyVisible = document.querySelector(`th[data-col-id="${columnId}"]`) !== null;
+      if (desired && !alreadyVisible) toggleExtraColumn(key);
+      if (!desired && alreadyVisible) toggleExtraColumn(key);
+    }
+
+    // Place checkboxes
+    const controls = document.createElement('div');
+    controls.className = 'd-flex justify-content-center gap-4 mt-3 flex-wrap';
+    controls.innerHTML = `
+      <label><input type="checkbox" onchange="toggleExtraColumn('contrib')"> Chi-Square Contributions</label>
+      <label><input type="checkbox" onchange="toggleExtraColumn('residual')"> Residuals</label>
+      <label><input type="checkbox" onchange="toggleExtraColumn('standardized')"> Standardized Residuals</label>
+    `;
+    const insertLocation = document.getElementById('checkbox-controls');
+    insertLocation.innerHTML = '';
+    insertLocation.appendChild(controls);
+
+    const table = document.getElementById('data-table');
+    for (let i = 0; i < rowCount; i++) {
+      const obs = observed[i];
+      const exp = expected[i];
+      const residual = obs - exp;
+      const standardized = residual / Math.sqrt(exp);
+      const contrib = Math.pow(obs - exp, 2) / exp;
+      table.rows[i].setAttribute('data-expected', exp.toFixed(3));
+      table.rows[i].setAttribute('data-residual', residual.toFixed(3));
+      table.rows[i].setAttribute('data-standardized', standardized.toFixed(3));
+      table.rows[i].setAttribute('data-contrib', contrib.toFixed(3));
+    }
+  }
+
+  function toggleExtraColumn(type) {
+    const table = document.getElementById('data-table');
+    const headers = document.querySelector('thead tr');
+    const columnMap = {
+    'expected': 'Expected',
+    'residual': 'Residual',
+    'standardized': 'Std. Residual',
+    'contrib': 'χ² Contrib.'
+  };
+    const columnId = `col-${type}`;
+    const existingIndex = Array.from(headers.cells).findIndex(cell => cell.dataset.colId === columnId);
+    if (existingIndex === -1) {
+      const th = document.createElement('th');
+      th.textContent = columnMap[type];
+      th.dataset.colId = columnId;
+      headers.appendChild(th);
+      for (let row of table.rows) {
+        const td = document.createElement('td');
+        td.textContent = row.getAttribute(`data-${type}`);
+        td.dataset.colId = columnId;
+        row.appendChild(td);
+      }
+    } else {
+      headers.deleteCell(existingIndex);
+      for (let row of table.rows) {
+        row.deleteCell(existingIndex);
+      }
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    createTable();
+    monitorInputValidity();
+});
+function fullReset() {
+  const tableBody = document.getElementById("data-table");
+  tableBody.innerHTML = "";
+
+  rowCount = 6;
+  for (let i = 1; i <= rowCount; i++) {
+    const row = document.createElement("tr");
+
+    const labelCell = document.createElement("td");
+    labelCell.innerText = "Category " + i;
+    row.appendChild(labelCell);
+
+    const obsCell = document.createElement("td");
+    const obsInput = document.createElement("input");
+    obsInput.type = "number";
+    obsInput.className = "cell-input";
+    obsInput.min = "0";
+    obsCell.appendChild(obsInput);
+    row.appendChild(obsCell);
+
+    const expCell = document.createElement("td");
+    const expInput = document.createElement("input");
+    expInput.type = "number";
+    expInput.className = "cell-input";
+    expInput.min = "0";
+    expCell.appendChild(expInput);
+    row.appendChild(expCell);
+
+    tableBody.appendChild(row);
+  }
+
+  // Remove any extra columns (Residuals, Std. Residuals, Contributions)
+  const headerRow = document.querySelector("thead tr");
+  while (headerRow.children.length > 3) {
+    headerRow.removeChild(headerRow.lastChild);
+  }
+  for (let row of tableBody.children) {
+    while (row.children.length > 3) {
+      row.removeChild(row.lastChild);
+    }
+  }
+
+  // Reset extras
+  document.getElementById("checkbox-controls").innerHTML = "";
+  document.getElementById("results").style.display = "none";
+  document.getElementById("results").innerHTML = "";
+  document.getElementById("calculateBtn").disabled = true;
+  document.getElementById("alphaInput").value = 0.05;
+  calculatedOnce = false;
+}
+
+</script>
+<script>
+function showMessage(text) {
+  const msgBox = document.getElementById('message');
+  msgBox.textContent = text;
+  msgBox.style.display = 'block';
+  setTimeout(() => {
+    msgBox.style.display = 'none';
+  }, 5000);
+ }
+  
+</script>
+<script>
+  function monitorInputValidity() {
+    const table = document.getElementById('data-table');
+    table.addEventListener('input', () => {
+      if (calculatedOnce) {
+        // Soft reset: hide results, clear checkboxes, remove extra columns
+        document.getElementById('results').style.display = 'none';
+        document.getElementById('checkbox-controls').innerHTML = '';
+        const headers = document.querySelector('thead tr');
+        ['col-expected', 'col-residual', 'col-standardized'].forEach(colId => {
+          const colIndex = Array.from(headers.cells).findIndex(cell => cell.dataset.colId === colId);
+          if (colIndex !== -1) {
+            headers.deleteCell(colIndex);
+            Array.from(document.getElementById('data-table').rows).forEach(row => row.deleteCell(colIndex));
+          }
+        });
+        calculatedOnce = false;
+        checkInput();
+      }
+    });
+    const observer = new MutationObserver(checkInput);
+    observer.observe(document.getElementById('data-table'), { childList: true, subtree: true });
+    document.getElementById('data-table').addEventListener('input', checkInput);
+  }
+
+  function checkInput() {
+    const observed = document.querySelectorAll('tbody tr td:nth-child(2) input');
+    let validCount = 0;
+    for (let i = 0; i < observed.length; i++) {
+      if (!isNaN(parseFloat(observed[i].value))) {
+        validCount++;
+      }
+    }
+    document.getElementById('calculateBtn').disabled = validCount < 2;
+  }
+</script>
+</body>
+</html>
+

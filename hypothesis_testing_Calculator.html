@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1024"/>
+  <title>Hypothesis Testing Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-pattern@1.3.0/dist/chartjs-plugin-pattern.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 40px;
+    }
+    .container {
+      border: 2px solid #ccc;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 700px;
+      width: 100%;
+      height: auto;
+      background-color: #fafafa;
+      text-align: center;
+      overflow: visible;
+    }
+    .button-group button {
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    .button-group button.active {
+      background-color: #4285f4;
+      color: white;
+      border: 1px solid #3367d6;
+    }
+    .input-group {
+      margin-bottom: 10px;
+      text-align: left;
+    }
+    .hypothesis-wrapper {
+      margin-top: 20px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 10px;
+      background-color: #fefefe;
+      text-align: center;
+    }
+    .hypothesis-subgroup {
+      margin: 10px 0;
+    }
+    label {
+      display: inline-block;
+      width: 250px;
+    }
+    input, select {
+      padding: 4px;
+    }
+    #altDirection {
+      margin: 0 4px;
+    }
+    #altValue {
+      width: auto;
+    }
+    .result-box {
+      background-color: #f4f4f4;
+      padding: 15px;
+      margin-top: 20px;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .result-box div + div {
+      margin-top: 6px;
+    }
+    .result-box div:first-child {
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Hypothesis Testing Calculator</h2>
+
+    <div class="input-group" style="margin-bottom: 20px;">
+      <label for="alpha">Significance Level (α):</label>
+      <input id="alpha" name="alpha" type="number" step="any" value="0.05" style="width: 100px;" />
+    </div>
+
+    <div class="button-group" style="display: flex; justify-content: center; align-items: center; height: 110px;">
+  <button onclick="selectTestType('proportion')" style="height: 50%;">Proportion</button>
+  <button onclick="selectTestType('mean')" style="height: 50%;">Mean</button>
+  <div style="display: flex; flex-direction: column; align-items: center; margin: 0 10px;">
+    <button onclick="selectTestType('difference')" style="width: 250px; margin-bottom: 5px;">Difference Between Two Means</button>
+    <button onclick="selectTestType('diffprop')" style="width: 250px;">Difference Between Two Proportions</button>
+  </div>
+  <button onclick="selectTestType('paired')" style="height: 50%;">Paired Differences</button>
+
+</div>
+
+    <div id="inputSection" class="section"></div>
+    <div id="result" class="section"></div>
+    <a href="#" id="toggleGraphBtn" onclick="toggleGraph(); return false;" style="visibility: hidden; text-decoration: underline; color: #0645AD; margin-top: 20px; font-size: 0.85em; float: left;">Show/Hide Graph</a>
+
+    <div id="graphSection" style="display: none;">
+      <canvas id="proportionChart" width="600" height="300"></canvas>
+    </div>
+  </div>
+
+  <script>
+    let currentTestType = "";
+    let chartInstance = null;
+
+    function createLabeledInput(id, labelText, type = "number", step = "any") {
+      return `<div class="input-group">
+                <label for="${id}">${labelText}</label>
+                <input id="${id}" name="${id}" type="${type}" step="${step}" />
+              </div>`;
+    }
+
+    function createHypothesisInputs(symbol) {
+      return `
+        <div class="hypothesis-wrapper">
+          <div class="hypothesis-subgroup">
+            <strong>Null Hypothesis:</strong>
+            <div>H<sub>0</sub>: ${symbol} = <input id="nullValue" type="number" step="any" style="width: 100px;" oninput="document.getElementById('altValue').textContent = this.value" /></div>
+          </div>
+          <div class="hypothesis-subgroup">
+            <strong>Alternative Hypothesis:</strong>
+            <div>H<sub>A</sub>: ${symbol}<select id="altDirection">
+              <option value="lt">&lt;</option>
+              <option value="gt">&gt;</option>
+              <option value="neq">≠</option>
+            </select><span id="altValue">0</span></div>
+          </div>
+        </div>
+      `;
+    }
+    
+function drawDistributionChart(stat, alpha, altDir, pValue, distType, df) {
+  const ctx = document.getElementById("proportionChart").getContext("2d");
+  const yValues = [], critLeft = [], critRight = [], statShadeLeft = [], statShadeRight = [];
+  const minX = distType === 'z' ? -4 : -5;
+  const maxX = distType === 'z' ? 4 : 5;
+  const step = 0.05;
+  const dist = jStat[distType === 'z' ? 'normal' : 'studentt'];
+  const critLeftCutoff = altDir === 'lt'
+    ? (distType === 'z' ? jStat.normal.inv(alpha, 0, 1) : jStat.studentt.inv(alpha, df))
+    : altDir === 'neq'
+      ? (distType === 'z' ? jStat.normal.inv(alpha / 2, 0, 1) : jStat.studentt.inv(alpha / 2, df))
+      : null;
+
+  const critRightCutoff = altDir === 'gt'
+    ? (distType === 'z' ? jStat.normal.inv(1 - alpha, 0, 1) : jStat.studentt.inv(1 - alpha, df))
+    : altDir === 'neq'
+      ? (distType === 'z' ? jStat.normal.inv(1 - alpha / 2, 0, 1) : jStat.studentt.inv(1 - alpha / 2, df))
+      : null;
+
+
+  for (let x = minX; x <= maxX; x += step) {
+    const y = distType === 'z' ? dist.pdf(x, 0, 1) : dist.pdf(x, df);
+    yValues.push({ x, y });
+
+    if (critLeftCutoff !== null && x < critLeftCutoff) critLeft.push({ x, y });
+    if (critRightCutoff !== null && x > critRightCutoff) critRight.push({ x, y });
+
+    if (altDir === 'lt' && x <= stat) statShadeLeft.push({ x, y });
+    if (altDir === 'gt' && x >= stat) statShadeRight.push({ x, y });
+    if (altDir === 'neq') {
+      if (x <= -Math.abs(stat)) statShadeLeft.push({ x, y });
+      if (x >= Math.abs(stat)) statShadeRight.push({ x, y });
+    }
+  }
+
+  if (chartInstance) chartInstance.destroy();
+  const stripeCanvas = document.createElement('canvas');
+  stripeCanvas.width = 10;
+  stripeCanvas.height = 10;
+  const stripeCtx = stripeCanvas.getContext('2d');
+  stripeCtx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+  stripeCtx.lineWidth = 2;
+  stripeCtx.beginPath();
+  stripeCtx.moveTo(0, 10);
+  stripeCtx.lineTo(10, 0);
+  stripeCtx.stroke();
+  const pattern = ctx.createPattern(stripeCanvas, 'repeat');
+
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: distType === 'z' ? 'Standard Normal (μ = 0, σ = 1)' : `t-Distribution (df = ${df})`, data: yValues, borderColor: 'black', borderWidth: 1, fill: false, pointRadius: 0 },
+        { label: 'Critical Region', data: critLeft.concat([{ x: NaN, y: NaN }], critRight), hidden: true, type: 'line', pointRadius: 0, fill: true, backgroundColor: pattern, borderWidth: 0 },
+        { label: 'P-Value Region', data: statShadeLeft.concat([{ x: NaN, y: NaN }], statShadeRight), backgroundColor: pValue < alpha ? 'rgba(0, 200, 0, 0.5)' : 'rgba(255, 50, 50, 0.5)', borderWidth: 0, type: 'line', pointRadius: 0, fill: { target: 'origin' } },
+        { label: 'Test Statistic', data: [
+          { x: stat, y: distType === 'z' ? jStat.normal.pdf(stat, 0, 1) : jStat.studentt.pdf(stat, df) },
+          { x: stat, y: 0 }
+        ], type: 'line', borderColor: 'black', borderWidth: 2, pointRadius: 0, fill: false }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'rect'
+          },
+          onClick: (e, legendItem, legend) => {
+            const index = legendItem.datasetIndex;
+            const ci = legend.chart;
+            const meta = ci.getDatasetMeta(index);
+            meta.hidden = meta.hidden === null ? !ci.data.datasets[index].hidden : null;
+            ci.update();
+          }
+        },
+        tooltip: { enabled: true }
+      },
+      scales: {
+        x: { type: 'linear', min: minX, max: maxX, title: { display: true, text: distType } },
+        y: { beginAtZero: true, title: { display: false } }
+      }
+    }
+  });
+}
+
+  
+  function selectTestType(type) {
+  const buttons = document.querySelectorAll('.button-group button');
+  buttons.forEach(btn => btn.classList.remove('active'));
+  const clickedButton = Array.from(buttons).find(btn => {
+    if (type === 'diffprop') return btn.textContent.includes('Difference Between Two Proportions');
+    if (type === 'difference') return btn.textContent.includes('Difference Between Two Means');
+    return btn.textContent.toLowerCase().includes(type);
+  });
+  if (clickedButton) clickedButton.classList.add('active');
+  currentTestType = type;
+  let html = '';
+
+  if (type === 'proportion') {
+    html = createLabeledInput("successes", "Number of Successes:") +
+           createLabeledInput("total", "Total Sample Size:") +
+           '<div style="margin-top:20px"></div>' +
+           createHypothesisInputs("p");
+
+  } else if (type === 'mean') {
+    html = createLabeledInput("mean", "Sample Mean:") +
+       createLabeledInput("size", "Sample Size (n):") +
+       `<div class="input-group">
+          <label for="knowPopSD">Do you know the population SD?</label>
+          <select id="knowPopSD">
+            <option value="no" selected>No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </div>` +
+       `<div class="input-group">
+          <label id="sdLabel" for="sampleSD">Sample Standard Deviation (s):</label>
+          <input id="sampleSD" name="sampleSD" type="number" step="any" />
+        </div>` +
+       '<div style="margin-top:20px"></div>' +
+       createHypothesisInputs("μ");
+
+    setTimeout(() => {
+  const select = document.getElementById('knowPopSD');
+  const label = document.getElementById('sdLabel');
+  if (select && label) {
+    const updateLabel = () => {
+      label.textContent = select.value === 'yes'
+        ? 'Population SD (σ):'
+        : 'Sample SD (s):';
+    };
+    updateLabel();
+    select.addEventListener('change', updateLabel);
+  }
+}, 0);
+
+
+  } else if (type === 'difference') {
+    html = createLabeledInput("mean1", "Sample Mean 1 (x̄₁):") +
+           createLabeledInput("sd1", "Sample SD 1 (s₁):") +
+           createLabeledInput("n1", "Sample Size 1 (n₁):") +
+           createLabeledInput("mean2", "Sample Mean 2 (x̄₂):") +
+           createLabeledInput("sd2", "Sample SD 2 (s₂):") +
+           createLabeledInput("n2", "Sample Size 2 (n₂):") +
+           `<div class="input-group" style="display: flex; flex-direction: column; align-items: flex-start;">
+  <strong>Degrees of Freedom Method:</strong>
+  <div style="display: flex; gap: 20px; flex-wrap: nowrap;">
+    <label><input type="radio" name="dfMethod" value="welch" checked> Unequal Variances (recommended)</label>
+    <label><input type="radio" name="dfMethod" value="pooled"> Equal Variances (pooled)</label>
+    <label><input type="radio" name="dfMethod" value="min"> Simplified (minimum)</label>
+  </div>
+            </div>` +
+           '<div style="margin-top:20px"></div>' +
+           createHypothesisInputs("μ₁ - μ₂");
+  
+
+  } else if (type === 'paired') {
+    html = createLabeledInput("meanDiff", "Mean of Differences (x̄<sub>d</sub>):") +
+           createLabeledInput("sdDiff", "SD of Differences (s<sub>d</sub>):") +
+           createLabeledInput("nDiff", "Sample Size (n):") +
+           '<div style="margin-top:20px"></div>' +
+           createHypothesisInputs("μ<sub>d</sub>");
+
+  } else if (type === 'diffprop') {
+    html = createLabeledInput("x1", "Sample 1 Successes (x₁):") +
+           createLabeledInput("n1", "Sample 1 Size (n₁):") +
+           createLabeledInput("x2", "Sample 2 Successes (x₂):") +
+           createLabeledInput("n2", "Sample 2 Size (n₂):") +
+           '<div style="margin-top:20px"></div>' +
+           createHypothesisInputs("p₁ - p₂");
+  }
+
+  html += `<button onclick="calculate()">Calculate</button>`;
+  document.getElementById("inputSection").innerHTML = html;
+  document.getElementById("result").innerHTML = "";
+  document.getElementById('graphSection').style.display = 'none';
+  document.getElementById('toggleGraphBtn').style.visibility = 'hidden';
+  if (chartInstance) {
+    chartInstance.destroy();
+    chartInstance = null;
+  }
+  if (window.MathJax) MathJax.typesetPromise();
+}
+
+
+    function getValue(id) {
+      const el = document.getElementById(id);
+      if (!el || el.value.trim() === '') {
+        alert(`Please enter a value for ${id}`);
+        throw new Error(`Missing value: ${id}`);
+      }
+      return parseFloat(el.value);
+    }
+
+function toggleGraph() {
+      const section = document.getElementById('graphSection');
+      section.style.display = section.style.display === 'block' ? 'none' : 'block';
+    }
+
+function maybeDrawProportionChart(testType, stat, alpha, altDir, pValue, df = null) {
+  document.getElementById('toggleGraphBtn').style.display = 'inline';
+  const distType = testType === 'mean' ? (df === null ? 'z' : 't') : (testType.includes('prop') ? 'z' : 't');
+drawDistributionChart(stat, alpha, altDir, pValue, distType, df);
+}
+
+function calculate() {
+      const alphaValue = document.getElementById("alpha").value;
+      if (alphaValue.trim() === '' || isNaN(alphaValue) || alphaValue <= 0 || alphaValue >= 1) {
+        alert("Please enter a significance level (α) between 0 and 1.");
+        return;
+      }
+      const alpha = parseFloat(alphaValue);
+      const altDir = document.getElementById("altDirection").value;
+      const nullVal = getValue("nullValue");
+      const resultBox = document.getElementById("result");
+      let pValue = null;
+      let resultDetails = "";
+
+      if (currentTestType === 'proportion') {
+        const successes = getValue("successes");
+        const total = getValue("total");
+        const phat = successes / total;
+        const se = Math.sqrt(nullVal * (1 - nullVal) / total);
+        const z = (phat - nullVal) / se;
+        const zCrit = jStat.normal.inv(1 - alpha / (altDir === 'neq' ? 2 : 1), 0, 1);
+        pValue = altDir === "lt" ? jStat.normal.cdf(z, 0, 1)
+                : altDir === "gt" ? 1 - jStat.normal.cdf(z, 0, 1)
+                : 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1));
+        resultDetails += `<div><strong>P-value:</strong> <span style='color:${pValue < alpha ? 'green' : 'red'}'>${pValue.toFixed(6)}</span></div>`;
+        resultDetails += `<div>Test Statistic (z): ${z.toFixed(4)}</div>`;
+        resultDetails += `<div>Critical Value${altDir === 'neq' ? 's' : ''}: ±${zCrit.toFixed(4)}</div>`;
+        resultDetails += `<div>Standard Error: ${se.toFixed(4)}</div>`;
+        resultDetails += `<div>Critical Region: ${altDir === 'lt' ? 'z < -' + zCrit.toFixed(4) : altDir === 'gt' ? 'z > ' + zCrit.toFixed(4) : '|z| > ' + zCrit.toFixed(4)}</div>`;
+	maybeDrawProportionChart(currentTestType, z, alpha, altDir, pValue);
+
+
+      } else if (currentTestType === 'mean') {
+        const mean = getValue("mean");
+        const n = getValue("size");
+        const sd = getValue("sampleSD");
+        const useZ = document.getElementById('knowPopSD').value === 'yes';
+        const se = sd / Math.sqrt(n);
+        const stat = (mean - nullVal) / se;
+
+        let crit, distType;
+        if (useZ) {
+          crit = jStat.normal.inv(1 - alpha / (altDir === 'neq' ? 2 : 1), 0, 1);
+          pValue = altDir === "lt" ? jStat.normal.cdf(stat, 0, 1)
+                  : altDir === "gt" ? 1 - jStat.normal.cdf(stat, 0, 1)
+                  : 2 * (1 - jStat.normal.cdf(Math.abs(stat), 0, 1));
+          distType = 'z';
+        } else {
+          crit = jStat.studentt.inv(1 - alpha / (altDir === 'neq' ? 2 : 1), n - 1);
+          pValue = altDir === "lt" ? jStat.studentt.cdf(stat, n - 1)
+                  : altDir === "gt" ? 1 - jStat.studentt.cdf(stat, n - 1)
+                  : 2 * (1 - jStat.studentt.cdf(Math.abs(stat), n - 1));
+          distType = 't';
+        }
+
+        maybeDrawProportionChart(currentTestType, stat, alpha, altDir, pValue, useZ ? null : n - 1);
+
+        resultDetails += `<div><strong>P-value:</strong> <span style='color:${pValue < alpha ? 'green' : 'red'}'>${pValue.toFixed(6)}</span></div>`;
+        resultDetails += `<div>Test Statistic (${distType}): ${stat.toFixed(4)}</div>`;
+        resultDetails += `<div>Critical Value${altDir === 'neq' ? 's' : ''}: ±${crit.toFixed(4)}</div>`;
+        resultDetails += `<div>Standard Error: ${se.toFixed(4)}</div>`;
+        if (!useZ) {
+          resultDetails += `<div>Degrees of Freedom: ${n - 1}</div>`;
+        }
+        resultDetails += `<div>Critical Region: ${altDir === 'lt' ? distType + ' < -' + crit.toFixed(4)
+          : altDir === 'gt' ? distType + ' > ' + crit.toFixed(4)
+          : '|' + distType + '| > ' + crit.toFixed(4)}</div>`;
+
+      } else if (currentTestType === 'paired') {
+        const mean = getValue(currentTestType === 'mean' ? "mean" : "meanDiff");
+        const n = getValue(currentTestType === 'mean' ? "size" : "nDiff");
+        const s = getValue(currentTestType === 'mean' ? "sampleSD" : "sdDiff");
+        const se = s / Math.sqrt(n);
+        const t = (mean - nullVal) / se;
+        const tCrit = jStat.studentt.inv(1 - alpha / (altDir === 'neq' ? 2 : 1), n - 1);
+        pValue = altDir === "lt" ? jStat.studentt.cdf(t, n - 1)
+                : altDir === "gt" ? 1 - jStat.studentt.cdf(t, n - 1)
+                : 2 * (1 - jStat.studentt.cdf(Math.abs(t), n - 1));
+        maybeDrawProportionChart(currentTestType, t, alpha, altDir, pValue, n - 1);
+
+        resultDetails += `<div><strong>P-value:</strong> <span style='color:${pValue < alpha ? 'green' : 'red'}'>${pValue.toFixed(6)}</span></div>`;
+        resultDetails += `<div>Test Statistic (t): ${t.toFixed(4)}</div>`;
+        resultDetails += `<div>Critical Value${altDir === 'neq' ? 's' : ''}: ±${tCrit.toFixed(4)}</div>`;
+        resultDetails += `<div>Standard Error: ${se.toFixed(4)}</div>`;
+        resultDetails += `<div>Degrees of Freedom: ${n - 1}</div>`;
+        resultDetails += `<div>Critical Region: ${altDir === 'lt' ? 't < -' + tCrit.toFixed(4) : altDir === 'gt' ? 't > ' + tCrit.toFixed(4) : '|t| > ' + tCrit.toFixed(4)}</div>`;
+
+      }else if (currentTestType === 'difference') {
+        const m1 = getValue("mean1");
+        const s1 = getValue("sd1");
+        const n1 = getValue("n1");
+        const m2 = getValue("mean2");
+        const s2 = getValue("sd2");
+        const n2 = getValue("n2");
+        const diff = m1 - m2;
+        const se = Math.sqrt(s1 ** 2 / n1 + s2 ** 2 / n2);
+        let dfMethod = document.querySelector('input[name="dfMethod"]:checked')?.value || 'welch';
+let df;
+if (dfMethod === 'welch') {
+  df = (Math.pow(se, 4) / ((Math.pow(s1 ** 2 / n1, 2) / (n1 - 1)) + (Math.pow(s2 ** 2 / n2, 2) / (n2 - 1))));
+} else if (dfMethod === 'pooled') {
+  df = n1 + n2 - 2;
+} else {
+  df = Math.min(n1, n2) - 1;
+}
+        const t = (diff - nullVal) / se;
+        const tCrit = jStat.studentt.inv(1 - alpha / (altDir === 'neq' ? 2 : 1), df);
+        pValue = altDir === "lt" ? jStat.studentt.cdf(t, df)
+                : altDir === "gt" ? 1 - jStat.studentt.cdf(t, df)
+                : 2 * (1 - jStat.studentt.cdf(Math.abs(t), df));
+        maybeDrawProportionChart(currentTestType, t, alpha, altDir, pValue, df);
+
+        resultDetails += `<div><strong>P-value:</strong> <span style='color:${pValue < alpha ? 'green' : 'red'}'>${pValue.toFixed(6)}</span></div>`;
+        resultDetails += `<div>Test Statistic (t): ${t.toFixed(4)}</div>`;
+        resultDetails += `<div>Critical Value${altDir === 'neq' ? 's' : ''}: ±${tCrit.toFixed(4)}</div>`;
+        resultDetails += `<div>Standard Error: ${se.toFixed(4)}</div>`;
+        resultDetails += `<div>Degrees of Freedom: ${df.toFixed(3)}</div>`;
+        resultDetails += `<div>Critical Region: ${altDir === 'lt' ? 't < -' + tCrit.toFixed(4) : altDir === 'gt' ? 't > ' + tCrit.toFixed(4) : '|t| > ' + tCrit.toFixed(4)}</div>`;
+
+      } else if (currentTestType === 'diffprop') {
+	  const x1 = getValue("x1");
+	  const n1 = getValue("n1");
+	  const x2 = getValue("x2");
+	  const n2 = getValue("n2");
+	  const p1_hat = x1 / n1;
+	  const p2_hat = x2 / n2;
+	  const p_hat = (x1 + x2) / (n1 + n2);
+	  const se = Math.sqrt(p_hat * (1 - p_hat) * (1/n1 + 1/n2));
+	  const z = ((p1_hat - p2_hat) - nullVal) / se;
+	  const zCrit = jStat.normal.inv(1 - alpha / (altDir === 'neq' ? 2 : 1), 0, 1);
+	  pValue = altDir === "lt" ? jStat.normal.cdf(z, 0, 1)
+        	  : altDir === "gt" ? 1 - jStat.normal.cdf(z, 0, 1)
+      		  : 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1));
+ 	 resultDetails += `<div><strong>P-value:</strong> <span style='color:${pValue < alpha ? 'green' : 'red'}'>${pValue.toFixed(6)}</span></div>`;
+ 	 resultDetails += `<div>Test Statistic (z): ${z.toFixed(4)}</div>`;
+	  resultDetails += `<div>Critical Value${altDir === 'neq' ? 's' : ''}: ±${zCrit.toFixed(4)}</div>`;
+	  resultDetails += `<div>Standard Error: ${se.toFixed(4)}</div>`;
+	  resultDetails += `<div>Critical Region: ${altDir === 'lt' ? 'z < -' + zCrit.toFixed(4) : altDir === 'gt' ? 'z > ' + zCrit.toFixed(4) : '|z| > ' + zCrit.toFixed(4)}</div>`;
+	  maybeDrawProportionChart(currentTestType, z, alpha, altDir, pValue);
+       }
+
+      resultBox.innerHTML = `<div class='result-box'>${resultDetails}</div>`;
+      document.getElementById('toggleGraphBtn').style.visibility = 'visible';
+
+    }
+  </script>
+</body>
+</html> 
+
